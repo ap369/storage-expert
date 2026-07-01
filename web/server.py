@@ -2,21 +2,31 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
+from typing import Dict, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
 
+from langchain_chroma import Chroma
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+
 from storage_expert.ingest import ingest_file, CHROMA_PATH
-from storage_expert.providers import get_embeddings
+from storage_expert.providers import get_embeddings, get_llm
 
 app = FastAPI(title="Storage Expert")
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+_sessions: Dict[str, List] = {}
 
 
 @app.get("/")
@@ -64,3 +74,67 @@ async def ingest_pdf(file: UploadFile = File(...)):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return {"status": "ok", "filename": file.filename, "chunks_stored": chunks_stored}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str
+
+
+_CONTEXTUALIZE_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", (
+        "Given the conversation history and the latest user question, "
+        "rewrite the question as a standalone question. Do not answer it."
+    )),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+
+_QA_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are an expert in enterprise storage hardware.
+Use the following excerpts from vendor documentation to answer the question.
+If the answer is not in the context, say so clearly.
+
+Context:
+{context}"""),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
+
+    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
+    if vectorstore._collection.count() == 0:
+        return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    llm = get_llm(provider)
+
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
+    chain = create_retrieval_chain(
+        history_aware_retriever,
+        create_stuff_documents_chain(llm, _QA_PROMPT),
+    )
+
+    chat_history = _sessions.get(req.session_id, [])
+    result = chain.invoke({"input": req.message, "chat_history": chat_history})
+    answer = result["answer"]
+
+    sources = set()
+    for doc in result.get("context", []):
+        src = doc.metadata.get("source", "")
+        page = doc.metadata.get("page")
+        label = Path(src).name
+        if page is not None:
+            label += f" (page {int(page) + 1})"
+        sources.add(label)
+
+    _sessions[req.session_id] = chat_history + [
+        HumanMessage(content=req.message),
+        AIMessage(content=answer),
+    ]
+
+    return {"answer": answer, "sources": sorted(sources)}
