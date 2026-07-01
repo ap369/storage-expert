@@ -21,12 +21,26 @@
     }
     #add-btn:hover { background: #74c7ec; }
     #file-input { display: none; }
-    #doc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; }
+    #doc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 40%; }
     #doc-list li {
       font-size: 12px; padding: 6px 8px; border-radius: 4px;
       background: #313244; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     #upload-status { font-size: 11px; color: #a6e3a1; min-height: 16px; }
+
+    /* MCP Servers section */
+    #mcp-section { display: flex; flex-direction: column; gap: 6px; }
+    #mcp-section.hidden { display: none; }
+    #mcp-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    #mcp-list li {
+      font-size: 12px; padding: 6px 8px; border-radius: 4px;
+      background: #313244; display: flex; align-items: center; gap: 6px;
+    }
+    .mcp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .mcp-dot.online  { background: #a6e3a1; }
+    .mcp-dot.offline { background: #f38ba8; }
+    .mcp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mcp-meta { font-size: 10px; color: #6c7086; white-space: nowrap; }
 
     /* Main chat area */
     #main { flex: 1; display: flex; flex-direction: column; }
@@ -97,6 +111,11 @@
   <input type="file" id="file-input" accept=".pdf" />
   <div id="upload-status"></div>
   <ul id="doc-list"></ul>
+
+  <div id="mcp-section" class="hidden">
+    <h2>MCP Servers</h2>
+    <ul id="mcp-list"></ul>
+  </div>
 </div>
 
 <div id="main">
@@ -233,7 +252,35 @@
     if (e.key === 'Enter') sendMessage();
   });
 
+  async function loadMcpServers() {
+    try {
+      const res = await fetch('/mcp-servers');
+      const { servers } = await res.json();
+      const section = document.getElementById('mcp-section');
+      const list = document.getElementById('mcp-list');
+      if (!servers.length) { section.classList.add('hidden'); return; }
+      section.classList.remove('hidden');
+      list.innerHTML = '';
+      servers.forEach(s => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'mcp-dot ' + (s.online ? 'online' : 'offline');
+        const name = document.createElement('span');
+        name.className = 'mcp-name';
+        name.textContent = s.name;
+        name.title = s.name;
+        const meta = document.createElement('span');
+        meta.className = 'mcp-meta';
+        meta.textContent = s.online ? `${s.tool_count} tools` : 'offline';
+        li.append(dot, name, meta);
+        list.appendChild(li);
+      });
+    } catch { /* server unreachable — leave section hidden */ }
+  }
+
   loadDocuments();
+  loadMcpServers();
+  setInterval(loadMcpServers, 30000);
 </script>
 </body>
 </html>

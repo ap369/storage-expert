@@ -1,0 +1,12 @@
+[
+  {
+    "name": "NetApp",
+    "transport": "streamable_http",
+    "url": "http://localhost:3000/mcp"
+  },
+  {
+    "name": "Pure Storage",
+    "transport": "stdio",
+    "command": "npx @purestorage/mcp-server"
+  }
+]

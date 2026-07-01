@@ -22,7 +22,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 
 from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
-from storage_expert.mcp_client import get_mcp_tools
+from storage_expert.mcp_client import get_mcp_tools, probe_servers
 
 app = FastAPI(title="Storage Expert")
 
@@ -49,6 +49,11 @@ def list_documents():
         if meta and "source" in meta:
             sources.add(Path(meta["source"]).name)
     return {"documents": sorted(sources)}
+
+
+@app.get("/mcp-servers")
+async def mcp_servers_status():
+    return {"servers": await probe_servers()}
 
 
 @app.post("/ingest")
