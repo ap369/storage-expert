@@ -1,7 +1,15 @@
+import hashlib
 import sqlite3
 from pathlib import Path
 
+import bcrypt
+
 DB_PATH = Path("users.db")
+
+
+def _prepare(password: str) -> bytes:
+    # SHA-256 digest so bcrypt never receives >72 bytes
+    return hashlib.sha256(password.encode()).hexdigest().encode()
 
 
 def init_db():
@@ -13,8 +21,7 @@ def init_db():
 
 
 def add_user(username: str, password: str):
-    from passlib.hash import bcrypt
-    password_hash = bcrypt.hash(password)
+    password_hash = bcrypt.hashpw(_prepare(password), bcrypt.gensalt()).decode()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             "INSERT INTO users (username, password_hash) VALUES (?, ?)",
@@ -23,11 +30,10 @@ def add_user(username: str, password: str):
 
 
 def verify_user(username: str, password: str) -> bool:
-    from passlib.hash import bcrypt
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             "SELECT password_hash FROM users WHERE username = ?", (username,)
         ).fetchone()
     if not row:
         return False
-    return bcrypt.verify(password, row[0])
+    return bcrypt.checkpw(_prepare(password), row[0].encode())
