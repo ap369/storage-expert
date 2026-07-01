@@ -1,13 +1,11 @@
 import os
-import uuid
 import tempfile
+import shutil
 from pathlib import Path
-from typing import Dict, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,9 +17,6 @@ app = FastAPI(title="Storage Expert")
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# In-memory session store: {session_id: [HumanMessage, AIMessage, ...]}
-_sessions: Dict[str, List] = {}
 
 
 @app.get("/")
@@ -46,19 +41,26 @@ async def ingest_pdf(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    tmp_dir = tempfile.mkdtemp()
+    tmp_path = os.path.join(tmp_dir, file.filename)
+    with open(tmp_path, "wb") as f:
+        f.write(await file.read())
+
+    # Check if already ingested by original filename
+    from langchain_chroma import Chroma
+    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
+    all_meta = vectorstore._collection.get()
+    existing_names = {Path(m["source"]).name for m in all_meta.get("metadatas", []) if m and "source" in m}
+    if file.filename in existing_names:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return {"status": "skipped", "filename": file.filename, "chunks_stored": 0}
 
     try:
-        from langchain_chroma import Chroma
-        vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
         before = vectorstore._collection.count()
         ingest_file(tmp_path)
         after = vectorstore._collection.count()
         chunks_stored = after - before
     finally:
-        os.unlink(tmp_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return {"status": "ok", "filename": file.filename, "chunks_stored": chunks_stored}
