@@ -10,6 +10,7 @@ install:
 	@echo "Done. Activate with: source $(VENV)/bin/activate"
 
 serve:
+	-pkill -f "uvicorn web.server" 2>/dev/null; sleep 0.5
 	$(BIN)/uvicorn web.server:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
 ingest:

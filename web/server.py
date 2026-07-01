@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
