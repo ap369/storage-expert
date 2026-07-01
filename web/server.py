@@ -119,7 +119,10 @@ def chat(req: ChatRequest):
     if vectorstore._collection.count() == 0:
         return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={"k": 5, "score_threshold": 0.3},
+    )
     llm = get_llm(provider)
 
     history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
