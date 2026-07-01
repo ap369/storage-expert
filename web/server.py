@@ -6,9 +6,10 @@ from typing import Dict, List
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -23,8 +24,14 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
 from storage_expert.mcp_client import get_mcp_tools, probe_servers
+from storage_expert.auth import init_db, verify_user
 
 app = FastAPI(title="Storage Expert")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SECRET_KEY", "change-me"),
+    https_only=False,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 VENDOR_DIR = Path(__file__).parent.parent / "vendor_pdfs"
@@ -34,12 +41,43 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _sessions: Dict[str, List] = {}
 
 
+@app.on_event("startup")
+def startup():
+    init_db()
+
+
+def require_auth(request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(str(STATIC_DIR / "login.html"))
+
+
+@app.post("/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    if not verify_user(username, password):
+        return RedirectResponse("/login?error=1", status_code=303)
+    request.session["user"] = username
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
+
+
 @app.get("/")
-def index():
+def index(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login")
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 
-@app.get("/documents")
+@app.get("/documents", dependencies=[Depends(require_auth)])
 def list_documents():
     from langchain_chroma import Chroma
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
@@ -51,12 +89,12 @@ def list_documents():
     return {"documents": sorted(sources)}
 
 
-@app.get("/mcp-servers")
+@app.get("/mcp-servers", dependencies=[Depends(require_auth)])
 async def mcp_servers_status():
     return {"servers": await probe_servers()}
 
 
-@app.post("/ingest")
+@app.post("/ingest", dependencies=[Depends(require_auth)])
 async def ingest_pdf(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -117,7 +155,7 @@ Context:
 ])
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
     provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
 

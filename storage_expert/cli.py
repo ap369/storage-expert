@@ -57,3 +57,18 @@ def chat(provider, model):
         start_chat(provider, model)
     except ValueError as e:
         raise click.ClickException(str(e))
+
+
+@cli.command()
+@click.argument("username")
+@click.password_option()
+def adduser(username, password):
+    """Add a user who can log in to the web UI."""
+    from storage_expert.auth import init_db, add_user
+    import sqlite3
+    init_db()
+    try:
+        add_user(username, password)
+        click.echo(f"User '{username}' created.")
+    except sqlite3.IntegrityError:
+        raise click.ClickException(f"User '{username}' already exists.")
