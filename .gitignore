@@ -1,0 +1,9 @@
+chroma_db/
+vendor_pdfs/
+.env
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.venv/
+venv/
