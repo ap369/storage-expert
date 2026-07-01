@@ -22,6 +22,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 
 from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
+from storage_expert.mcp_client import get_mcp_tools
 
 app = FastAPI(title="Storage Expert")
 
@@ -112,7 +113,7 @@ Context:
 
 
 @app.post("/chat")
-def chat(req: ChatRequest):
+async def chat(req: ChatRequest):
     provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
 
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
@@ -124,29 +125,47 @@ def chat(req: ChatRequest):
         search_kwargs={"k": 5, "score_threshold": 0.3},
     )
     llm = get_llm(provider)
-
-    history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
-    chain = create_retrieval_chain(
-        history_aware_retriever,
-        create_stuff_documents_chain(llm, _QA_PROMPT),
-    )
-
     chat_history = _sessions.get(req.session_id, [])
-    result = chain.invoke({"input": req.message, "chat_history": chat_history})
-    answer = result["answer"]
 
-    sources = set()
-    for doc in result.get("context", []):
-        src = doc.metadata.get("source", "")
-        page = doc.metadata.get("page")
-        label = Path(src).name
-        if page is not None:
-            label += f" (page {int(page) + 1})"
-        sources.add(label)
+    mcp_tools = await get_mcp_tools()
+
+    if mcp_tools:
+        from langgraph.prebuilt import create_react_agent
+        from langchain.tools.retriever import create_retriever_tool
+
+        rag_tool = create_retriever_tool(
+            retriever,
+            name="search_vendor_documents",
+            description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
+        )
+        agent = create_react_agent(llm, [rag_tool] + mcp_tools)
+        result = await agent.ainvoke({
+            "messages": chat_history + [HumanMessage(content=req.message)]
+        })
+        answer = result["messages"][-1].content
+        sources = []
+    else:
+        history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
+        chain = create_retrieval_chain(
+            history_aware_retriever,
+            create_stuff_documents_chain(llm, _QA_PROMPT),
+        )
+        result = chain.invoke({"input": req.message, "chat_history": chat_history})
+        answer = result["answer"]
+
+        sources = set()
+        for doc in result.get("context", []):
+            src = doc.metadata.get("source", "")
+            page = doc.metadata.get("page")
+            label = Path(src).name
+            if page is not None:
+                label += f" (page {int(page) + 1})"
+            sources.add(label)
+        sources = sorted(sources)
 
     _sessions[req.session_id] = chat_history + [
         HumanMessage(content=req.message),
         AIMessage(content=answer),
     ]
 
-    return {"answer": answer, "sources": sorted(sources)}
+    return {"answer": answer, "sources": sources}
