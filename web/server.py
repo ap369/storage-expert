@@ -1,8 +1,11 @@
+import logging
 import os
 import tempfile
 import shutil
 from pathlib import Path
 from typing import Dict, List
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -51,10 +54,14 @@ async def ingest_pdf(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
+    content = await file.read()
+    size_mb = len(content) / 1_048_576
+    logger.info("Upload received: %s (%.1f MB)", file.filename, size_mb)
+
     tmp_dir = tempfile.mkdtemp()
     tmp_path = os.path.join(tmp_dir, file.filename)
     with open(tmp_path, "wb") as f:
-        f.write(await file.read())
+        f.write(content)
 
     # Check if already ingested by original filename
     from langchain_chroma import Chroma

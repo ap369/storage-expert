@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -7,6 +8,9 @@ from langchain_chroma import Chroma
 from storage_expert.providers import get_embeddings
 
 CHROMA_PATH = "./chroma_db"
+_EMBED_BATCH = 50
+
+logger = logging.getLogger(__name__)
 
 
 def _get_vectorstore() -> Chroma:
@@ -22,39 +26,48 @@ def ingest_file(filepath: str) -> None:
     abs_path = str(Path(filepath).resolve())
 
     if not Path(abs_path).exists():
-        print(f"Error: File not found: {filepath}")
+        logger.error("File not found: %s", filepath)
         return
 
     vectorstore = _get_vectorstore()
 
     if _already_ingested(vectorstore, abs_path):
-        print(f"Skipping (already ingested): {Path(filepath).name}")
+        logger.info("Skipping (already ingested): %s", Path(filepath).name)
         return
 
-    print(f"Ingesting: {Path(filepath).name}")
+    size_mb = Path(abs_path).stat().st_size / 1_048_576
+    logger.info("Ingesting: %s (%.1f MB)", Path(filepath).name, size_mb)
+
     try:
         loader = PyMuPDFLoader(abs_path)
         docs = loader.load()
     except Exception as e:
-        print(f"Warning: Could not read {filepath}: {e}")
+        logger.warning("Could not read %s: %s", filepath, e)
         return
 
+    logger.info("  Loaded %d pages — chunking...", len(docs))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
+    logger.info("  Created %d chunks — embedding (this may take a while)...", len(chunks))
 
-    vectorstore.add_documents(chunks)
-    print(f"  Stored {len(chunks)} chunks from {len(docs)} pages")
+    for i in range(0, len(chunks), _EMBED_BATCH):
+        batch = chunks[i:i + _EMBED_BATCH]
+        vectorstore.add_documents(batch)
+        done = min(i + _EMBED_BATCH, len(chunks))
+        logger.info("  Embedded %d/%d chunks...", done, len(chunks))
+
+    logger.info("  Done: stored %d chunks from %d pages", len(chunks), len(docs))
 
 
 def ingest_folder(folder_path: str) -> None:
     folder = Path(folder_path)
     if not folder.is_dir():
-        print(f"Error: Not a directory: {folder_path}")
+        logger.error("Not a directory: %s", folder_path)
         return
 
     pdfs = sorted(folder.glob("*.pdf"))
     if not pdfs:
-        print(f"No PDF files found in {folder_path}")
+        logger.info("No PDF files found in %s", folder_path)
         return
 
     for pdf in pdfs:

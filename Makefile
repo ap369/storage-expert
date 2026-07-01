@@ -10,7 +10,7 @@ install:
 	@echo "Done. Activate with: source $(VENV)/bin/activate"
 
 serve:
-	$(BIN)/uvicorn web.server:app --host 0.0.0.0 --port 8000 --reload
+	$(BIN)/uvicorn web.server:app --host 0.0.0.0 --port 8000 --reload --log-level info
 
 ingest:
 	$(BIN)/storage-expert ingest $(ARGS)
