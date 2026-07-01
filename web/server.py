@@ -1,7 +1,5 @@
 import logging
 import os
-import tempfile
-import shutil
 from pathlib import Path
 from typing import Dict, List
 
@@ -27,6 +25,8 @@ from storage_expert.providers import get_embeddings, get_llm
 app = FastAPI(title="Storage Expert")
 
 STATIC_DIR = Path(__file__).parent / "static"
+VENDOR_DIR = Path(__file__).parent.parent / "vendor_pdfs"
+VENDOR_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _sessions: Dict[str, List] = {}
@@ -58,27 +58,28 @@ async def ingest_pdf(file: UploadFile = File(...)):
     size_mb = len(content) / 1_048_576
     logger.info("Upload received: %s (%.1f MB)", file.filename, size_mb)
 
-    tmp_dir = tempfile.mkdtemp()
-    tmp_path = os.path.join(tmp_dir, file.filename)
-    with open(tmp_path, "wb") as f:
-        f.write(content)
-
     # Check if already ingested by original filename
     from langchain_chroma import Chroma
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
     all_meta = vectorstore._collection.get()
     existing_names = {Path(m["source"]).name for m in all_meta.get("metadatas", []) if m and "source" in m}
     if file.filename in existing_names:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
         return {"status": "skipped", "filename": file.filename, "chunks_stored": 0}
+
+    # Save to vendor_pdfs/ for permanent storage
+    saved_path = VENDOR_DIR / file.filename
+    with open(saved_path, "wb") as f:
+        f.write(content)
+    logger.info("Saved to vendor_pdfs/%s", file.filename)
 
     try:
         before = vectorstore._collection.count()
-        ingest_file(tmp_path)
+        ingest_file(str(saved_path))
         after = vectorstore._collection.count()
         chunks_stored = after - before
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception:
+        saved_path.unlink(missing_ok=True)
+        raise
 
     return {"status": "ok", "filename": file.filename, "chunks_stored": chunks_stored}
 
