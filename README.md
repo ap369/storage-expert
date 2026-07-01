@@ -2,68 +2,117 @@
 
 AI agent that reads enterprise storage vendor PDFs (NetApp, Pure Storage, Dell EMC, HPE, etc.) and answers natural language questions about specs, features, and compatibility.
 
-Built with LangChain, ChromaDB, and your choice of LLM provider.
+Built with LangChain, ChromaDB, FastAPI, and your choice of LLM provider.
 
 ## Features
 
-- **Ingest** vendor PDFs — single file or entire folder
+- **Web chatbot** — browser-based chat UI with conversation memory
+- **Ingest** vendor PDFs via web upload or CLI (single file or folder)
 - **Ask** single-shot questions from the command line
-- **Chat** interactively with conversation memory across turns
 - **Persistent** vector store — ingest once, query forever
 - **Multi-provider** — Claude, OpenAI, Groq, Ollama, or any OpenAI-compatible router
+- **Docker-ready** — single image, cloud deployable
 
-## Quick Start
+---
+
+## Quick Start (Local)
 
 ```bash
 # 1. Clone and install
 git clone https://github.com/ap369/storage-expert.git
 cd storage-expert
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+make install
 
 # 2. Configure
 cp .env.example .env
 # Edit .env and add your API key(s)
 
 # 3. Ingest vendor PDFs
-storage-expert ingest --folder vendor_pdfs/
-# or a single file:
-storage-expert ingest --file netapp_aff_a800.pdf
+make ingest ARGS="--folder vendor_pdfs/"
 
-# 4. Ask questions
-storage-expert ask "What is the max IOPS of the NetApp AFF A800?"
-
-# 5. Or chat interactively
-storage-expert chat
+# 4. Start the web UI
+make serve
+# Open http://localhost:8000
 ```
+
+---
+
+## Quick Start (Docker)
+
+```bash
+cp .env.example .env
+# Edit .env and add your API key(s)
+
+make docker-build
+make docker-up
+# Open http://localhost:8000
+
+make docker-down   # stop
+```
+
+The `chroma_db/` knowledge base is mounted as a volume — it persists across container restarts.
+
+---
+
+## CLI Usage
+
+```bash
+# Ingest
+make ingest ARGS="--file vendor_pdfs/netapp_aff_a800.pdf"
+make ingest ARGS="--folder vendor_pdfs/"
+
+# Single-shot question
+make ask ARGS="'What is the max IOPS of the NetApp AFF A800?'"
+
+# Interactive chat
+make chat
+
+# Or use the CLI directly
+source .venv/bin/activate
+storage-expert ask --provider groq "What protocols does Pure Storage support?"
+storage-expert chat --provider openai
+```
+
+---
+
+## Makefile Reference
+
+| Command | Description |
+|---|---|
+| `make install` | Create venv and install all dependencies |
+| `make serve` | Start the web server at http://localhost:8000 |
+| `make ingest ARGS="..."` | Ingest PDFs (pass --file or --folder) |
+| `make ask ARGS="'question'"` | Ask a single question |
+| `make chat` | Start interactive CLI chat |
+| `make docker-build` | Build the Docker image |
+| `make docker-up` | Start the app with docker compose |
+| `make docker-down` | Stop the app |
+| `make clean` | Remove venv and cached files |
+
+---
 
 ## Providers
 
-| Provider | Flag | Required env var |
-|---|---|---|
-| Claude (default) | `--provider claude` | `ANTHROPIC_API_KEY` |
-| OpenAI | `--provider openai` | `OPENAI_API_KEY` |
-| Groq | `--provider groq` | `GROQ_API_KEY` |
-| Ollama (local) | `--provider ollama` | none |
-| Custom / router | `--provider custom` | `CUSTOM_API_URL` + `CUSTOM_API_KEY` |
+| Provider | Env var required |
+|---|---|
+| `claude` (default) | `ANTHROPIC_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `groq` | `GROQ_API_KEY` |
+| `ollama` | none (Ollama must be running) |
+| `custom` | `CUSTOM_API_URL` + `CUSTOM_API_KEY` |
 
-Switch provider at runtime:
-
-```bash
-storage-expert ask --provider groq "What protocols does Pure Storage support?"
-storage-expert chat --provider openai
-storage-expert chat --provider ollama --model llama3
-```
-
-Set a default in `.env`:
-
+Set default provider in `.env`:
 ```env
 STORAGE_EXPERT_PROVIDER=groq
 ```
 
+Override at runtime: `storage-expert chat --provider openai`
+
+---
+
 ## Embeddings
 
-Embeddings default to `all-MiniLM-L6-v2` running locally via `sentence-transformers` — no API key needed, ~80MB download on first use.
+Default: `all-MiniLM-L6-v2` via `sentence-transformers` — runs locally, no API key needed (~80MB download on first use).
 
 Override via `STORAGE_EXPERT_EMBEDDINGS` in `.env`:
 
@@ -71,25 +120,34 @@ Override via `STORAGE_EXPERT_EMBEDDINGS` in `.env`:
 |---|---|---|
 | `huggingface` (default) | Local sentence-transformers | none |
 | `openai` | OpenAI text-embedding-3-small | `OPENAI_API_KEY` |
-| `ollama` | Ollama nomic-embed-text | Ollama running locally |
+| `ollama` | Ollama nomic-embed-text | Ollama running |
+
+---
 
 ## Project Structure
 
 ```
 storage_expert/
-├── storage_expert/
-│   ├── cli.py          # Click CLI — ingest / ask / chat commands
-│   ├── providers.py    # LLM + embeddings configuration
-│   ├── ingest.py       # PDF loading, chunking, ChromaDB storage
-│   ├── qa.py           # Single-shot Q&A
-│   └── chat.py         # Interactive chat with conversation memory
-├── vendor_pdfs/        # Drop your PDFs here (gitignored)
-├── chroma_db/          # Persistent vector store (gitignored)
-├── .env.example        # Environment variable reference
-└── pyproject.toml
+├── storage_expert/       # Core RAG pipeline (CLI)
+│   ├── cli.py            # Click CLI — ingest / ask / chat
+│   ├── providers.py      # LLM + embeddings config
+│   ├── ingest.py         # PDF → chunks → ChromaDB
+│   ├── qa.py             # Single-shot Q&A
+│   └── chat.py           # Interactive chat with memory
+├── web/
+│   ├── server.py         # FastAPI app (REST API)
+│   └── static/
+│       └── index.html    # Single-page chat UI
+├── vendor_pdfs/          # Drop PDFs here (gitignored)
+├── chroma_db/            # Persistent vector store (gitignored)
+├── Dockerfile
+├── docker-compose.yml
+├── Makefile
+└── .env.example
 ```
 
 ## Requirements
 
 - Python 3.9+
 - An API key for your chosen LLM provider
+- Docker (optional, for containerized deployment)
