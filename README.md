@@ -6,12 +6,13 @@ Built with LangChain, ChromaDB, FastAPI, and your choice of LLM provider.
 
 ## Features
 
-- **Web chatbot** — browser-based chat UI with conversation memory
+- **Web chatbot** — browser-based chat UI with conversation memory and markdown rendering
 - **Ingest** vendor PDFs via web upload or CLI (single file or folder)
 - **Ask** single-shot questions from the command line
 - **Persistent** vector store — ingest once, query forever
 - **Multi-provider** — Claude, OpenAI, Groq, Ollama, or any OpenAI-compatible router
-- **Docker-ready** — single image, cloud deployable
+- **Docker-ready** — single image, volume-mounted knowledge base
+- **VM-ready** — systemd + nginx deployment included
 
 ---
 
@@ -27,12 +28,10 @@ make install
 cp .env.example .env
 # Edit .env and add your API key(s)
 
-# 3. Ingest vendor PDFs
-make ingest ARGS="--folder vendor_pdfs/"
-
-# 4. Start the web UI
+# 3. Start the web UI
 make serve
 # Open http://localhost:8000
+# Upload PDFs from the sidebar and start chatting
 ```
 
 ---
@@ -51,6 +50,33 @@ make docker-down   # stop
 ```
 
 The `chroma_db/` knowledge base is mounted as a volume — it persists across container restarts.
+
+---
+
+## VM Deployment (systemd + nginx)
+
+On a fresh Ubuntu 22.04 VM:
+
+```bash
+# 1. Install system dependencies
+apt install -y python3 python3-venv nginx git
+
+# 2. Clone the repo
+git clone https://github.com/ap369/storage-expert.git /data/storage-expert
+cd /data/storage-expert
+
+# 3. Configure
+cp .env.example .env && nano .env
+
+# 4. Deploy (as root)
+make deploy
+# App is now running at http://<server-ip>
+```
+
+To update after a code change:
+```bash
+make deploy-update   # git pull + pip install + restart
+```
 
 ---
 
@@ -77,17 +103,42 @@ storage-expert chat --provider openai
 
 ## Makefile Reference
 
+Run `make` or `make help` to see all commands.
+
+**Local development**
+
 | Command | Description |
 |---|---|
 | `make install` | Create venv and install all dependencies |
 | `make serve` | Start the web server at http://localhost:8000 |
-| `make ingest ARGS="..."` | Ingest PDFs (pass --file or --folder) |
+| `make ingest ARGS="..."` | Ingest PDFs (--file or --folder) |
 | `make ask ARGS="'question'"` | Ask a single question |
 | `make chat` | Start interactive CLI chat |
+
+**Knowledge base**
+
+| Command | Description |
+|---|---|
+| `make reset` | Wipe ChromaDB (clean slate) |
+| `make reingest` | Re-ingest all PDFs under `vendor_pdfs/` |
+
+**Docker**
+
+| Command | Description |
+|---|---|
 | `make docker-build` | Build the Docker image |
 | `make docker-up` | Start the app with docker compose |
 | `make docker-down` | Stop the app |
-| `make clean` | Remove venv and cached files |
+
+**VM deployment** (run as root on the server)
+
+| Command | Description |
+|---|---|
+| `make deploy` | Full first-time setup (venv + systemd + nginx) |
+| `make deploy-update` | Pull latest code and restart service |
+| `make deploy-start/stop/restart` | Control the systemd service |
+| `make deploy-status` | Show service status |
+| `make deploy-logs` | Tail live service logs |
 
 ---
 
@@ -138,6 +189,9 @@ storage_expert/
 │   ├── server.py         # FastAPI app (REST API)
 │   └── static/
 │       └── index.html    # Single-page chat UI
+├── deploy/
+│   ├── storage-expert.service   # systemd unit file
+│   └── nginx.conf               # nginx reverse proxy config
 ├── vendor_pdfs/          # Drop PDFs here (gitignored)
 ├── chroma_db/            # Persistent vector store (gitignored)
 ├── Dockerfile
@@ -151,3 +205,4 @@ storage_expert/
 - Python 3.9+
 - An API key for your chosen LLM provider
 - Docker (optional, for containerized deployment)
+- nginx + systemd (optional, for VM deployment)

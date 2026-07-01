@@ -1,9 +1,41 @@
-.PHONY: install serve ingest ask chat docker-build docker-up docker-down clean reset reingest \
+.PHONY: help install serve ingest ask chat docker-build docker-up docker-down clean reset reingest \
         deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
         deploy-start deploy-stop deploy-restart deploy-status deploy-logs
 
 VENV = .venv
 BIN  = $(VENV)/bin
+
+help:
+	@echo ""
+	@echo "Storage Expert — available commands"
+	@echo ""
+	@echo "Local development:"
+	@echo "  make install                  Create venv and install dependencies"
+	@echo "  make serve                    Start web UI at http://localhost:8000"
+	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
+	@echo "  make ask    ARGS='question'   Ask a single question"
+	@echo "  make chat                     Interactive CLI chat"
+	@echo ""
+	@echo "Knowledge base:"
+	@echo "  make reset                    Wipe ChromaDB (clean slate)"
+	@echo "  make reingest                 Re-ingest all PDFs under vendor_pdfs/"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build             Build the Docker image"
+	@echo "  make docker-up                Start with docker compose"
+	@echo "  make docker-down              Stop docker compose"
+	@echo ""
+	@echo "VM deployment (run as root on the server):"
+	@echo "  make deploy                   Full first-time setup (venv + systemd + nginx)"
+	@echo "  make deploy-update            Pull latest code and restart service"
+	@echo "  make deploy-start             Start the systemd service"
+	@echo "  make deploy-stop              Stop the systemd service"
+	@echo "  make deploy-restart           Restart the systemd service"
+	@echo "  make deploy-status            Show service status"
+	@echo "  make deploy-logs              Tail live service logs"
+	@echo ""
+	@echo "  make clean                    Remove venv and cached files"
+	@echo ""
 
 install:
 	python3 -m venv $(VENV)
