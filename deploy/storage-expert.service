@@ -1,0 +1,14 @@
+[Unit]
+Description=Storage Expert — AI Storage Q&A
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/data/storage-expert
+EnvironmentFile=/data/storage-expert/.env
+ExecStart=/data/storage-expert/.venv/bin/uvicorn web.server:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

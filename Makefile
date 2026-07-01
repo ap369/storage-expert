@@ -1,4 +1,6 @@
-.PHONY: install serve ingest ask chat docker-build docker-up docker-down clean reset reingest
+.PHONY: install serve ingest ask chat docker-build docker-up docker-down clean reset reingest \
+        deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
+        deploy-start deploy-stop deploy-restart deploy-status deploy-logs
 
 VENV = .venv
 BIN  = $(VENV)/bin
@@ -40,3 +42,47 @@ reingest:
 
 clean:
 	rm -rf $(VENV) __pycache__ storage_expert/__pycache__ web/__pycache__ *.egg-info
+
+# ── VM deployment (systemd + nginx, project at /data/storage-expert) ──────────
+DEPLOY_DIR = /data/storage-expert
+SERVICE    = storage-expert
+
+deploy-setup:
+	python3 -m venv $(DEPLOY_DIR)/.venv
+	$(DEPLOY_DIR)/.venv/bin/pip install --upgrade pip --quiet
+	$(DEPLOY_DIR)/.venv/bin/pip install -e . --quiet
+	mkdir -p $(DEPLOY_DIR)/vendor_pdfs
+
+deploy-install-service:
+	cp deploy/storage-expert.service /etc/systemd/system/
+	systemctl daemon-reload
+	systemctl enable $(SERVICE)
+
+deploy-install-nginx:
+	cp deploy/nginx.conf /etc/nginx/sites-available/$(SERVICE)
+	ln -sf /etc/nginx/sites-available/$(SERVICE) /etc/nginx/sites-enabled/$(SERVICE)
+	nginx -t && systemctl reload nginx
+
+deploy: deploy-setup deploy-install-service deploy-install-nginx
+	systemctl start $(SERVICE)
+	@echo "Deployed. App is running at http://$(shell hostname -I | awk '{print $$1}')"
+
+deploy-update:
+	git -C $(DEPLOY_DIR) pull
+	$(DEPLOY_DIR)/.venv/bin/pip install -e . --quiet
+	systemctl restart $(SERVICE)
+
+deploy-start:
+	systemctl start $(SERVICE)
+
+deploy-stop:
+	systemctl stop $(SERVICE)
+
+deploy-restart:
+	systemctl restart $(SERVICE)
+
+deploy-status:
+	systemctl status $(SERVICE)
+
+deploy-logs:
+	journalctl -u $(SERVICE) -f
