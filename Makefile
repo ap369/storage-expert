@@ -1,4 +1,4 @@
-.PHONY: help install serve ingest ask chat docker-build docker-up docker-down clean reset reingest \
+.PHONY: help install serve ingest ask chat adduser docker-build docker-up docker-down clean reset reingest \
         deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
         deploy-start deploy-stop deploy-restart deploy-status deploy-logs
 
@@ -15,6 +15,9 @@ help:
 	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
 	@echo "  make ask    ARGS='question'   Ask a single question"
 	@echo "  make chat                     Interactive CLI chat"
+	@echo ""
+	@echo "User management:"
+	@echo "  make adduser ARGS='username'  Create a web UI user (prompts for password)"
 	@echo ""
 	@echo "Knowledge base:"
 	@echo "  make reset                    Wipe ChromaDB (clean slate)"
@@ -55,6 +58,9 @@ ask:
 
 chat:
 	$(BIN)/storage-expert chat $(ARGS)
+
+adduser:
+	$(BIN)/storage-expert adduser $(ARGS)
 
 docker-build:
 	docker build -t storage-expert .
