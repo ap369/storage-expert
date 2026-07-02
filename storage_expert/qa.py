@@ -7,18 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
-
-_SYSTEM_PROMPT = """You are a storage documentation assistant. Your only source of truth is the vendor documentation excerpts provided below.
-
-Rules you must follow without exception:
-- ONLY use information explicitly stated in the context below.
-- NEVER use your training knowledge to fill gaps, invent commands, invent options, or invent specifications.
-- If the context does not contain the answer, respond with: "I don't have that information in the loaded documentation. Please upload the relevant vendor PDF or check the official documentation."
-- CLI commands, syntax, flags, and configuration options are especially risky to hallucinate. Only cite them if they appear verbatim in the context.
-- Partial information is fine — answer what the context covers and flag what it does not.
-
-Context:
-{context}"""
+from storage_expert.prompts import load_system_prompt
 
 
 def _format_docs(docs) -> str:
@@ -36,7 +25,7 @@ def ask_question(question: str, provider: str, model: Optional[str] = None) -> N
     llm = get_llm(provider, model)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", _SYSTEM_PROMPT),
+        ("system", load_system_prompt()),
         ("human", "{input}"),
     ])
 
