@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "storage-expert"
 version = "0.1.0"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "langchain>=0.3",
     "langchain-community>=0.3",
@@ -31,6 +31,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
 mcp = [
     "mcp>=1.0",
     "langchain-mcp-adapters>=0.1",
@@ -43,3 +46,14 @@ storage-expert = "storage_expert.cli:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["storage_expert*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    # langchain-community is deprecated upstream; no standalone PyMuPDFLoader yet
+    "ignore:`langchain-community` is being sunset:DeprecationWarning",
+    # FastAPI on_event is fixed (using lifespan now); suppress residual starlette warning
+    "ignore:on_event is deprecated:DeprecationWarning",
+    # pymupdf SWIG C extension internals — not actionable
+    "ignore:builtin type Swig.*has no __module__:DeprecationWarning",
+]

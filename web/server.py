@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List
 
@@ -25,7 +26,14 @@ from storage_expert.providers import get_embeddings, get_llm
 from storage_expert.mcp_client import get_mcp_tools, probe_servers
 from storage_expert.auth import init_db, verify_user
 
-app = FastAPI(title="Storage Expert")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Storage Expert", lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "change-me"),
@@ -38,11 +46,6 @@ VENDOR_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _sessions: Dict[str, List] = {}
-
-
-@app.on_event("startup")
-def startup():
-    init_db()
 
 
 def require_auth(request: Request):

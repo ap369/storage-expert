@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install (locked)
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip pip-tools --quiet
+          .venv/bin/pip-sync requirements.lock --quiet
+          .venv/bin/pip install -e . --no-deps --quiet
+
+      - name: Smoke tests
+        run: make check

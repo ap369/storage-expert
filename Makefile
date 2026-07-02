@@ -1,4 +1,5 @@
-.PHONY: help install install-mcp serve download-models ingest ask chat adduser docker-build docker-up docker-down clean reset reingest \
+.PHONY: help install install-dev install-mcp install-locked lock check serve download-models ingest ask chat adduser \
+        docker-build docker-up docker-down clean reset reingest \
         deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
         deploy-start deploy-stop deploy-restart deploy-status deploy-logs
 
@@ -11,7 +12,11 @@ help:
 	@echo ""
 	@echo "Local development:"
 	@echo "  make install                  Create venv and install dependencies"
+	@echo "  make install-dev              Install dev extras (pytest)"
 	@echo "  make install-mcp              Install MCP extras (requires Python 3.10+)"
+	@echo "  make install-locked           Install exact versions from requirements.lock"
+	@echo "  make lock                     Regenerate requirements.lock from pyproject.toml"
+	@echo "  make check                    Run smoke tests (no API keys needed)"
 	@echo "  make download-models          Download embedding model for offline use (~80MB)"
 	@echo "  make serve                    Start web UI at http://localhost:8000"
 	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
@@ -43,10 +48,27 @@ help:
 	@echo ""
 
 install:
-	python3 -m venv $(VENV)
+	python3.11 -m venv $(VENV)
 	$(BIN)/pip install --upgrade pip --quiet
 	$(BIN)/pip install -e . --quiet
 	@echo "Done. Activate with: source $(VENV)/bin/activate"
+
+install-dev:
+	$(BIN)/pip install -e '.[dev]' --quiet
+	@echo "Dev extras installed (pytest)."
+
+install-locked:
+	$(BIN)/pip install -r requirements.lock --quiet
+	$(BIN)/pip install -e . --no-deps --quiet
+	@echo "Installed from lock file."
+
+lock:
+	$(BIN)/pip install pip-tools --quiet
+	$(BIN)/pip-compile pyproject.toml --extra dev --output-file requirements.lock --quiet
+	@echo "requirements.lock updated. Commit this file."
+
+check:
+	$(BIN)/pytest tests/ -v
 
 install-mcp:
 	$(BIN)/pip install -e '.[mcp]' --quiet
@@ -95,7 +117,7 @@ DEPLOY_DIR = /data/storage-expert
 SERVICE    = storage-expert
 
 deploy-setup:
-	python3 -m venv $(DEPLOY_DIR)/.venv
+	python3.11 -m venv $(DEPLOY_DIR)/.venv
 	$(DEPLOY_DIR)/.venv/bin/pip install --upgrade pip --quiet
 	$(DEPLOY_DIR)/.venv/bin/pip install -e . --quiet
 	mkdir -p $(DEPLOY_DIR)/vendor_pdfs
