@@ -3,8 +3,7 @@ from typing import Optional
 
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
@@ -15,6 +14,10 @@ If the answer is not covered by the provided context, say so clearly — do not 
 
 Context:
 {context}"""
+
+
+def _format_docs(docs) -> str:
+    return "\n\n".join(d.page_content for d in docs)
 
 
 def ask_question(question: str, provider: str, model: Optional[str] = None) -> None:
@@ -32,8 +35,9 @@ def ask_question(question: str, provider: str, model: Optional[str] = None) -> N
         ("human", "{input}"),
     ])
 
-    chain = create_retrieval_chain(retriever, create_stuff_documents_chain(llm, prompt))
-    result = chain.invoke({"input": question})
+    docs = retriever.invoke(question)
+    answer = (prompt | llm | StrOutputParser()).invoke({"input": question, "context": _format_docs(docs)})
+    result = {"answer": answer, "context": docs}
 
     print(f"\n{result['answer']}\n")
     _print_sources(result.get("context", []))

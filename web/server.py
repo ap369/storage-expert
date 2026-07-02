@@ -18,8 +18,7 @@ load_dotenv()
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
@@ -155,6 +154,10 @@ Context:
 ])
 
 
+def _format_docs(docs) -> str:
+    return "\n\n".join(d.page_content for d in docs)
+
+
 @app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
     provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
@@ -174,7 +177,7 @@ async def chat(req: ChatRequest):
 
     if mcp_tools:
         from langgraph.prebuilt import create_react_agent
-        from langchain.tools.retriever import create_retriever_tool
+        from langchain_core.tools.retriever import create_retriever_tool
 
         rag_tool = create_retriever_tool(
             retriever,
@@ -188,16 +191,20 @@ async def chat(req: ChatRequest):
         answer = result["messages"][-1].content
         sources = []
     else:
-        history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
-        chain = create_retrieval_chain(
-            history_aware_retriever,
-            create_stuff_documents_chain(llm, _QA_PROMPT),
+        contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
+        standalone_q = (
+            contextualize_chain.invoke({"input": req.message, "chat_history": chat_history})
+            if chat_history else req.message
         )
-        result = chain.invoke({"input": req.message, "chat_history": chat_history})
-        answer = result["answer"]
+        docs = retriever.invoke(standalone_q)
+        answer = (_QA_PROMPT | llm | StrOutputParser()).invoke({
+            "input": req.message,
+            "chat_history": chat_history,
+            "context": _format_docs(docs),
+        })
 
         sources = set()
-        for doc in result.get("context", []):
+        for doc in docs:
             src = doc.metadata.get("source", "")
             page = doc.metadata.get("page")
             label = Path(src).name

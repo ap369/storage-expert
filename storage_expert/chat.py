@@ -4,8 +4,7 @@ from typing import Optional
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
@@ -34,6 +33,10 @@ _QA_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
+def _format_docs(docs) -> str:
+    return "\n\n".join(d.page_content for d in docs)
+
+
 def start_chat(provider: str, model: Optional[str] = None) -> None:
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
 
@@ -43,12 +46,8 @@ def start_chat(provider: str, model: Optional[str] = None) -> None:
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
     llm = get_llm(provider, model)
-
-    history_aware_retriever = create_history_aware_retriever(llm, retriever, _CONTEXTUALIZE_PROMPT)
-    chain = create_retrieval_chain(
-        history_aware_retriever,
-        create_stuff_documents_chain(llm, _QA_PROMPT),
-    )
+    contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
+    qa_chain = _QA_PROMPT | llm | StrOutputParser()
 
     chat_history = []
     print(f"Storage Expert Chat [{provider}] — type 'exit' to quit\n")
@@ -66,11 +65,19 @@ def start_chat(provider: str, model: Optional[str] = None) -> None:
             print("Goodbye!")
             break
 
-        result = chain.invoke({"input": question, "chat_history": chat_history})
-        answer = result["answer"]
+        standalone_q = (
+            contextualize_chain.invoke({"input": question, "chat_history": chat_history})
+            if chat_history else question
+        )
+        docs = retriever.invoke(standalone_q)
+        answer = qa_chain.invoke({
+            "input": question,
+            "chat_history": chat_history,
+            "context": _format_docs(docs),
+        })
 
         print(f"\n{answer}\n")
-        _print_sources(result.get("context", []))
+        _print_sources(docs)
 
         chat_history.extend([HumanMessage(content=question), AIMessage(content=answer)])
 
