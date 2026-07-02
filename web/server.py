@@ -188,12 +188,17 @@ async def chat(req: ChatRequest):
             description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
         )
         agent = create_react_agent(llm, [rag_tool] + mcp_tools)
-        result = await agent.ainvoke({
-            "messages": chat_history + [HumanMessage(content=req.message)]
-        })
-        answer = result["messages"][-1].content
-        sources = []
-    else:
+        try:
+            result = await agent.ainvoke({
+                "messages": chat_history + [HumanMessage(content=req.message)]
+            })
+            answer = result["messages"][-1].content
+            sources = []
+        except Exception as e:
+            logger.warning("MCP agent failed (%s: %s), falling back to RAG", type(e).__name__, e)
+            mcp_tools = []  # fall through to RAG path below
+
+    if not mcp_tools:
         contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
         standalone_q = (
             contextualize_chain.invoke({"input": req.message, "chat_history": chat_history})
