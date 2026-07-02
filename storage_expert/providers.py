@@ -63,4 +63,5 @@ def get_embeddings():
 
     else:  # huggingface (default)
         from langchain_huggingface import HuggingFaceEmbeddings
-        return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        models_dir = os.path.join(os.getcwd(), "models")
+        return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", cache_folder=models_dir)

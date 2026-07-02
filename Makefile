@@ -1,4 +1,4 @@
-.PHONY: help install serve ingest ask chat adduser docker-build docker-up docker-down clean reset reingest \
+.PHONY: help install serve download-models ingest ask chat adduser docker-build docker-up docker-down clean reset reingest \
         deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
         deploy-start deploy-stop deploy-restart deploy-status deploy-logs
 
@@ -11,6 +11,7 @@ help:
 	@echo ""
 	@echo "Local development:"
 	@echo "  make install                  Create venv and install dependencies"
+	@echo "  make download-models          Download embedding model for offline use (~80MB)"
 	@echo "  make serve                    Start web UI at http://localhost:8000"
 	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
 	@echo "  make ask    ARGS='question'   Ask a single question"
@@ -45,6 +46,9 @@ install:
 	$(BIN)/pip install --upgrade pip --quiet
 	$(BIN)/pip install -e . --quiet
 	@echo "Done. Activate with: source $(VENV)/bin/activate"
+
+download-models:
+	$(BIN)/python -c "import os; from langchain_huggingface import HuggingFaceEmbeddings; HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2', cache_folder=os.path.join(os.getcwd(), 'models')); print('Model ready in ./models/')"
 
 serve:
 	-pkill -f "uvicorn web.server" 2>/dev/null; sleep 0.5
