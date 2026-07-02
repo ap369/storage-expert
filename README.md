@@ -7,10 +7,13 @@ Built with LangChain, ChromaDB, FastAPI, and your choice of LLM provider.
 ## Features
 
 - **Web chatbot** — browser-based chat UI with conversation memory and markdown rendering
+- **Authentication** — login page, session cookies, CLI user management
 - **Ingest** vendor PDFs via web upload or CLI (single file or folder)
 - **Ask** single-shot questions from the command line
 - **Persistent** vector store — ingest once, query forever
 - **Multi-provider** — Claude, OpenAI, Groq, Ollama, or any OpenAI-compatible router
+- **MCP support** — connect any MCP server for live tool calling alongside RAG
+- **Offline-ready** — pre-download the embedding model for air-gapped VMs
 - **Docker-ready** — single image, volume-mounted knowledge base
 - **VM-ready** — systemd + nginx deployment included
 
@@ -28,10 +31,12 @@ make install
 cp .env.example .env
 # Edit .env and add your API key(s)
 
-# 3. Start the web UI
+# 3. Create your first user
+make adduser ARGS="yourname"
+
+# 4. Start the web UI
 make serve
-# Open http://localhost:8000
-# Upload PDFs from the sidebar and start chatting
+# Open http://localhost:8000 and log in
 ```
 
 ---
@@ -68,7 +73,10 @@ cd /data/storage-expert
 # 3. Configure
 cp .env.example .env && nano .env
 
-# 4. Deploy (as root)
+# 4. Create a user
+make adduser ARGS="admin"
+
+# 5. Deploy (as root)
 make deploy
 # App is now running at http://<server-ip>
 ```
@@ -77,6 +85,61 @@ To update after a code change:
 ```bash
 make deploy-update   # git pull + pip install + restart
 ```
+
+### Offline VM (no internet)
+
+```bash
+# On a machine WITH internet — run once
+make download-models        # saves model to ./models/ (~80MB)
+
+# Copy to the VM
+rsync -a models/ user@vm:/data/storage-expert/models/
+
+# On the VM — add to .env
+echo "HF_HUB_OFFLINE=1" >> .env
+```
+
+---
+
+## Authentication
+
+Access to the web UI requires a login. Users are managed via CLI — there is no self-registration.
+
+```bash
+# Create a user
+make adduser ARGS="alice"
+# Prompts for password (hidden input, confirmed twice)
+
+# Or directly
+storage-expert adduser alice
+```
+
+Users are stored in `users.db` (SQLite, gitignored). Passwords are hashed with bcrypt + SHA-256.
+
+---
+
+## MCP Integration
+
+Connect any MCP server to give the LLM access to live tools (e.g. NetApp APIs) alongside the PDF knowledge base.
+
+```bash
+# 1. Install MCP extras (requires Python 3.10+)
+pip install -e '.[mcp]'
+
+# 2. Create mcp_servers.json (gitignored)
+cp mcp_servers.example.json mcp_servers.json
+# Edit with your actual server details
+```
+
+`mcp_servers.json` format:
+```json
+[
+  { "name": "NetApp", "transport": "streamable_http", "url": "http://localhost:3000/mcp" },
+  { "name": "Pure Storage", "transport": "stdio", "command": "npx @purestorage/mcp-server" }
+]
+```
+
+The sidebar shows each server's online/offline status and tool count, refreshing every 30 seconds.
 
 ---
 
@@ -110,10 +173,17 @@ Run `make` or `make help` to see all commands.
 | Command | Description |
 |---|---|
 | `make install` | Create venv and install all dependencies |
+| `make download-models` | Pre-download embedding model for offline use (~80MB) |
 | `make serve` | Start the web server at http://localhost:8000 |
 | `make ingest ARGS="..."` | Ingest PDFs (--file or --folder) |
 | `make ask ARGS="'question'"` | Ask a single question |
 | `make chat` | Start interactive CLI chat |
+
+**User management**
+
+| Command | Description |
+|---|---|
+| `make adduser ARGS="username"` | Create a web UI user (prompts for password) |
 
 **Knowledge base**
 
@@ -163,7 +233,7 @@ Override at runtime: `storage-expert chat --provider openai`
 
 ## Embeddings
 
-Default: `all-MiniLM-L6-v2` via `sentence-transformers` — runs locally, no API key needed (~80MB download on first use).
+Default: `all-MiniLM-L6-v2` via `sentence-transformers` — runs locally, no API key needed. Model is cached in `./models/` after first download.
 
 Override via `STORAGE_EXPERT_EMBEDDINGS` in `.env`:
 
@@ -179,21 +249,28 @@ Override via `STORAGE_EXPERT_EMBEDDINGS` in `.env`:
 
 ```
 storage_expert/
-├── storage_expert/       # Core RAG pipeline (CLI)
-│   ├── cli.py            # Click CLI — ingest / ask / chat
-│   ├── providers.py      # LLM + embeddings config
-│   ├── ingest.py         # PDF → chunks → ChromaDB
-│   ├── qa.py             # Single-shot Q&A
-│   └── chat.py           # Interactive chat with memory
+├── storage_expert/          # Core RAG pipeline (CLI)
+│   ├── cli.py               # Click CLI — ingest / ask / chat / adduser
+│   ├── providers.py         # LLM + embeddings config
+│   ├── ingest.py            # PDF → chunks → ChromaDB
+│   ├── qa.py                # Single-shot Q&A
+│   ├── chat.py              # Interactive chat with memory
+│   ├── auth.py              # User management (SQLite + bcrypt)
+│   └── mcp_client.py        # MCP server connection + tool loader
 ├── web/
-│   ├── server.py         # FastAPI app (REST API)
+│   ├── server.py            # FastAPI app (REST API + auth)
 │   └── static/
-│       └── index.html    # Single-page chat UI
+│       ├── index.html       # Single-page chat UI
+│       └── login.html       # Login page
 ├── deploy/
 │   ├── storage-expert.service   # systemd unit file
 │   └── nginx.conf               # nginx reverse proxy config
-├── vendor_pdfs/          # Drop PDFs here (gitignored)
-├── chroma_db/            # Persistent vector store (gitignored)
+├── models/                  # Cached embedding model (gitignored)
+├── vendor_pdfs/             # Drop PDFs here (gitignored)
+├── chroma_db/               # Persistent vector store (gitignored)
+├── mcp_servers.json         # MCP server config (gitignored)
+├── mcp_servers.example.json # MCP config template
+├── users.db                 # User database (gitignored)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── Makefile
@@ -206,3 +283,4 @@ storage_expert/
 - An API key for your chosen LLM provider
 - Docker (optional, for containerized deployment)
 - nginx + systemd (optional, for VM deployment)
+- Python 3.10+ (optional, for MCP integration)
