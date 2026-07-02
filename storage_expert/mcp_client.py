@@ -26,7 +26,10 @@ def _to_adapter_config(servers: List[dict]) -> dict:
         name = s["name"]
         transport = s.get("transport", "streamable_http" if "url" in s else "stdio")
         if transport == "streamable_http":
-            config[name] = {"url": s["url"], "transport": "streamable_http"}
+            entry = {"url": s["url"], "transport": "streamable_http"}
+            if s.get("headers"):
+                entry["headers"] = s["headers"]
+            config[name] = entry
         else:
             if s.get("args") is not None:
                 # Claude Desktop format: command is binary, args is a list

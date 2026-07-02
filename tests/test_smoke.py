@@ -130,6 +130,16 @@ def test_adapter_infers_transport_from_url():
     cfg = _to_adapter_config([{"name": "X", "url": "http://x/mcp"}])
     assert cfg["X"]["transport"] == "streamable_http"
 
+def test_adapter_http_with_auth_headers():
+    from storage_expert.mcp_client import _to_adapter_config
+    cfg = _to_adapter_config([{
+        "name": "X",
+        "transport": "streamable_http",
+        "url": "http://x/mcp",
+        "headers": {"Authorization": "Bearer token123"},
+    }])
+    assert cfg["X"]["headers"] == {"Authorization": "Bearer token123"}
+
 
 # ── auth: init_db / add_user / verify_user ───────────────────────────────────
 
