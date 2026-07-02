@@ -34,17 +34,23 @@ async def get_mcp_tools() -> list:
     servers = load_server_configs()
     if not servers:
         return []
-    MultiServerMCPClient = _import_client()
+    try:
+        MultiServerMCPClient = _import_client()
+    except RuntimeError:
+        return []
     async with MultiServerMCPClient(_to_adapter_config(servers)) as client:
         return client.get_tools()
 
 
 async def probe_servers() -> List[dict]:
     servers = load_server_configs()
-    results = []
     if not servers:
-        return results
-    MultiServerMCPClient = _import_client()
+        return []
+    try:
+        MultiServerMCPClient = _import_client()
+    except RuntimeError as e:
+        return [{**s, "online": False, "tool_count": 0, "error": str(e)} for s in servers]
+    results = []
     for s in servers:
         try:
             async with MultiServerMCPClient(_to_adapter_config([s])) as client:
