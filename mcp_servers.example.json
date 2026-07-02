@@ -2,7 +2,8 @@
   {
     "name": "NetApp",
     "transport": "streamable_http",
-    "url": "http://localhost:3000/mcp"
+    "url": "http://localhost:3000/mcp",
+    "headers": { "Authorization": "Bearer <your-token>" }
   },
   {
     "name": "Pure Storage",
