@@ -8,17 +8,33 @@ MCP_CONFIG_PATH = Path("mcp_servers.json")
 def load_server_configs() -> List[dict]:
     if not MCP_CONFIG_PATH.exists():
         return []
-    return json.loads(MCP_CONFIG_PATH.read_text())
+    data = json.loads(MCP_CONFIG_PATH.read_text())
+    # Support Claude Desktop dict format: {"mcpServers": {"Name": {...}}}
+    if isinstance(data, dict):
+        servers = data.get("mcpServers", data)
+        return [{"name": name, **cfg} for name, cfg in servers.items()]
+    # Ensure every entry has a name
+    for i, s in enumerate(data):
+        if "name" not in s:
+            s["name"] = s.get("url") or s.get("command", f"server-{i}")
+    return data
 
 
 def _to_adapter_config(servers: List[dict]) -> dict:
     config = {}
     for s in servers:
-        if s["transport"] == "streamable_http":
-            config[s["name"]] = {"url": s["url"], "transport": "streamable_http"}
+        name = s["name"]
+        transport = s.get("transport", "streamable_http" if "url" in s else "stdio")
+        if transport == "streamable_http":
+            config[name] = {"url": s["url"], "transport": "streamable_http"}
         else:
-            parts = s["command"].split()
-            config[s["name"]] = {"command": parts[0], "args": parts[1:], "transport": "stdio"}
+            if s.get("args") is not None:
+                # Claude Desktop format: command is binary, args is a list
+                config[name] = {"command": s["command"], "args": s["args"], "transport": "stdio"}
+            else:
+                # Our format: command is the full string to split
+                parts = s["command"].split()
+                config[name] = {"command": parts[0], "args": parts[1:], "transport": "stdio"}
     return config
 
 
