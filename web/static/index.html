@@ -158,6 +158,7 @@
 
   async function loadDocuments() {
     const res = await apiFetch('/documents');
+    if (!res) return;
     const data = await res.json();
     const list = document.getElementById('doc-list');
     list.innerHTML = '';
@@ -305,12 +306,13 @@
       const data = await res.json();
       if (!data.rag_enabled) {
         document.getElementById('kb-section').classList.add('hidden');
+      } else {
+        await loadDocuments();
       }
     } catch { /* leave kb-section visible on error */ }
   }
 
   initConfig();
-  loadDocuments();
   loadMcpServers();
   setInterval(loadMcpServers, 30000);
 </script>
