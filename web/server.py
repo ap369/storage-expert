@@ -18,7 +18,6 @@ load_dotenv()
 
 from storage_expert.config import RAG_ENABLED
 
-from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -181,6 +180,7 @@ async def chat(req: ChatRequest):
     chat_history = _sessions.get(req.session_id, [])
 
     if RAG_ENABLED:
+        from langchain_chroma import Chroma
         vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
         if vectorstore._collection.count() == 0:
             return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
@@ -192,16 +192,16 @@ async def chat(req: ChatRequest):
         mcp_tools = await get_mcp_tools()
 
         if mcp_tools:
-            from langgraph.prebuilt import create_react_agent
-            from langchain_core.tools.retriever import create_retriever_tool
-
-            rag_tool = create_retriever_tool(
-                retriever,
-                name="search_vendor_documents",
-                description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
-            )
-            agent = create_react_agent(llm, [rag_tool] + mcp_tools)
             try:
+                from langgraph.prebuilt import create_react_agent
+                from langchain_core.tools.retriever import create_retriever_tool
+
+                rag_tool = create_retriever_tool(
+                    retriever,
+                    name="search_vendor_documents",
+                    description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
+                )
+                agent = create_react_agent(llm, [rag_tool] + mcp_tools)
                 result = await agent.ainvoke({
                     "messages": chat_history + [HumanMessage(content=req.message)]
                 })
@@ -214,11 +214,11 @@ async def chat(req: ChatRequest):
         if not mcp_tools:
             contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
             standalone_q = (
-                contextualize_chain.invoke({"input": req.message, "chat_history": chat_history})
+                await contextualize_chain.ainvoke({"input": req.message, "chat_history": chat_history})
                 if chat_history else req.message
             )
-            docs = retriever.invoke(standalone_q)
-            answer = (_QA_PROMPT | llm | StrOutputParser()).invoke({
+            docs = await retriever.ainvoke(standalone_q)
+            answer = await (_QA_PROMPT | llm | StrOutputParser()).ainvoke({
                 "input": req.message,
                 "chat_history": chat_history,
                 "context": _format_docs(docs),
@@ -238,9 +238,9 @@ async def chat(req: ChatRequest):
         mcp_tools = await get_mcp_tools()
 
         if mcp_tools:
-            from langgraph.prebuilt import create_react_agent
-            agent = create_react_agent(llm, mcp_tools)
             try:
+                from langgraph.prebuilt import create_react_agent
+                agent = create_react_agent(llm, mcp_tools)
                 result = await agent.ainvoke({
                     "messages": chat_history + [HumanMessage(content=req.message)]
                 })
@@ -250,7 +250,7 @@ async def chat(req: ChatRequest):
                 mcp_tools = []
 
         if not mcp_tools:
-            answer = (_DIRECT_PROMPT | llm | StrOutputParser()).invoke({
+            answer = await (_DIRECT_PROMPT | llm | StrOutputParser()).ainvoke({
                 "input": req.message,
                 "chat_history": chat_history,
             })
