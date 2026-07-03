@@ -15,3 +15,7 @@ def load_system_prompt() -> str:
     if _PROMPT_PATH.exists():
         return _PROMPT_PATH.read_text()
     return _FALLBACK
+
+
+def load_direct_prompt() -> str:
+    return "You are a helpful assistant."

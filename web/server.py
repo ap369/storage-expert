@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-RAG_ENABLED = os.getenv("STORAGE_EXPERT_RAG_ENABLED", "true").lower() == "true"
+from storage_expert.config import RAG_ENABLED
 
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -27,7 +27,7 @@ from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
 from storage_expert.mcp_client import get_mcp_tools, probe_servers
 from storage_expert.auth import init_db, verify_user
-from storage_expert.prompts import load_system_prompt
+from storage_expert.prompts import load_system_prompt, load_direct_prompt
 
 
 @asynccontextmanager
@@ -164,7 +164,7 @@ _QA_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 _DIRECT_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant."),
+    ("system", load_direct_prompt()),
     MessagesPlaceholder("chat_history"),
     ("human", "{input}"),
 ])

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -7,9 +6,13 @@ from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
-from storage_expert.prompts import load_system_prompt
+from storage_expert.prompts import load_system_prompt, load_direct_prompt
+from storage_expert.config import RAG_ENABLED
 
-RAG_ENABLED = os.getenv("STORAGE_EXPERT_RAG_ENABLED", "true").lower() == "true"
+_DIRECT_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", load_direct_prompt()),
+    ("human", "{input}"),
+])
 
 
 def _format_docs(docs) -> str:
@@ -20,11 +23,7 @@ def ask_question(question: str, provider: str, model: Optional[str] = None) -> N
     llm = get_llm(provider, model)
 
     if not RAG_ENABLED:
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant."),
-            ("human", "{input}"),
-        ])
-        answer = (prompt | llm | StrOutputParser()).invoke({"input": question})
+        answer = (_DIRECT_PROMPT | llm | StrOutputParser()).invoke({"input": question})
         print(f"\n{answer}\n")
         return
 
