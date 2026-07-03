@@ -108,11 +108,13 @@
 <body>
 
 <div id="sidebar">
-  <h2>Knowledge Base</h2>
-  <button id="add-btn">+ Add PDF</button>
-  <input type="file" id="file-input" accept=".pdf" />
-  <div id="upload-status"></div>
-  <ul id="doc-list"></ul>
+  <div id="kb-section">
+    <h2>Knowledge Base</h2>
+    <button id="add-btn">+ Add PDF</button>
+    <input type="file" id="file-input" accept=".pdf" />
+    <div id="upload-status"></div>
+    <ul id="doc-list"></ul>
+  </div>
 
   <div id="mcp-section" class="hidden">
     <h2>MCP Servers</h2>
@@ -292,6 +294,18 @@
     } catch { /* server unreachable — leave section hidden */ }
   }
 
+  async function initConfig() {
+    try {
+      const res = await apiFetch('/config');
+      if (!res) return;
+      const data = await res.json();
+      if (!data.rag_enabled) {
+        document.getElementById('kb-section').classList.add('hidden');
+      }
+    } catch { /* leave kb-section visible on error */ }
+  }
+
+  initConfig();
   loadDocuments();
   loadMcpServers();
   setInterval(loadMcpServers, 30000);

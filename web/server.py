@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+RAG_ENABLED = os.getenv("STORAGE_EXPERT_RAG_ENABLED", "true").lower() == "true"
+
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
@@ -80,8 +82,15 @@ def index(request: Request):
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 
+@app.get("/config")
+async def get_config():
+    return {"rag_enabled": RAG_ENABLED}
+
+
 @app.get("/documents", dependencies=[Depends(require_auth)])
 def list_documents():
+    if not RAG_ENABLED:
+        return {"documents": []}
     from langchain_chroma import Chroma
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
     results = vectorstore._collection.get()
@@ -99,6 +108,8 @@ async def mcp_servers_status():
 
 @app.post("/ingest", dependencies=[Depends(require_auth)])
 async def ingest_pdf(file: UploadFile = File(...)):
+    if not RAG_ENABLED:
+        raise HTTPException(status_code=503, detail="RAG is disabled. Set STORAGE_EXPERT_RAG_ENABLED=true to enable PDF ingestion.")
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
@@ -152,6 +163,12 @@ _QA_PROMPT = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
 ])
 
+_DIRECT_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+
 
 def _format_docs(docs) -> str:
     return "\n\n".join(d.page_content for d in docs)
@@ -160,62 +177,85 @@ def _format_docs(docs) -> str:
 @app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
     provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
-
-    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
-    if vectorstore._collection.count() == 0:
-        return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
-
-    retriever = vectorstore.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={"k": 5, "score_threshold": 0.3},
-    )
     llm = get_llm(provider)
     chat_history = _sessions.get(req.session_id, [])
 
-    mcp_tools = await get_mcp_tools()
+    if RAG_ENABLED:
+        vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
+        if vectorstore._collection.count() == 0:
+            return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
 
-    if mcp_tools:
-        from langgraph.prebuilt import create_react_agent
-        from langchain_core.tools.retriever import create_retriever_tool
-
-        rag_tool = create_retriever_tool(
-            retriever,
-            name="search_vendor_documents",
-            description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
+        retriever = vectorstore.as_retriever(
+            search_type="similarity_score_threshold",
+            search_kwargs={"k": 5, "score_threshold": 0.3},
         )
-        agent = create_react_agent(llm, [rag_tool] + mcp_tools)
-        try:
-            result = await agent.ainvoke({
-                "messages": chat_history + [HumanMessage(content=req.message)]
+        mcp_tools = await get_mcp_tools()
+
+        if mcp_tools:
+            from langgraph.prebuilt import create_react_agent
+            from langchain_core.tools.retriever import create_retriever_tool
+
+            rag_tool = create_retriever_tool(
+                retriever,
+                name="search_vendor_documents",
+                description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
+            )
+            agent = create_react_agent(llm, [rag_tool] + mcp_tools)
+            try:
+                result = await agent.ainvoke({
+                    "messages": chat_history + [HumanMessage(content=req.message)]
+                })
+                answer = result["messages"][-1].content
+                sources = []
+            except Exception as e:
+                logger.warning("MCP agent failed (%s: %s), falling back to RAG", type(e).__name__, e)
+                mcp_tools = []
+
+        if not mcp_tools:
+            contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
+            standalone_q = (
+                contextualize_chain.invoke({"input": req.message, "chat_history": chat_history})
+                if chat_history else req.message
+            )
+            docs = retriever.invoke(standalone_q)
+            answer = (_QA_PROMPT | llm | StrOutputParser()).invoke({
+                "input": req.message,
+                "chat_history": chat_history,
+                "context": _format_docs(docs),
             })
-            answer = result["messages"][-1].content
-            sources = []
-        except Exception as e:
-            logger.warning("MCP agent failed (%s: %s), falling back to RAG", type(e).__name__, e)
-            mcp_tools = []  # fall through to RAG path below
 
-    if not mcp_tools:
-        contextualize_chain = _CONTEXTUALIZE_PROMPT | llm | StrOutputParser()
-        standalone_q = (
-            contextualize_chain.invoke({"input": req.message, "chat_history": chat_history})
-            if chat_history else req.message
-        )
-        docs = retriever.invoke(standalone_q)
-        answer = (_QA_PROMPT | llm | StrOutputParser()).invoke({
-            "input": req.message,
-            "chat_history": chat_history,
-            "context": _format_docs(docs),
-        })
+            sources = set()
+            for doc in docs:
+                src = doc.metadata.get("source", "")
+                page = doc.metadata.get("page")
+                label = Path(src).name
+                if page is not None:
+                    label += f" (page {int(page) + 1})"
+                sources.add(label)
+            sources = sorted(sources)
 
-        sources = set()
-        for doc in docs:
-            src = doc.metadata.get("source", "")
-            page = doc.metadata.get("page")
-            label = Path(src).name
-            if page is not None:
-                label += f" (page {int(page) + 1})"
-            sources.add(label)
-        sources = sorted(sources)
+    else:
+        mcp_tools = await get_mcp_tools()
+
+        if mcp_tools:
+            from langgraph.prebuilt import create_react_agent
+            agent = create_react_agent(llm, mcp_tools)
+            try:
+                result = await agent.ainvoke({
+                    "messages": chat_history + [HumanMessage(content=req.message)]
+                })
+                answer = result["messages"][-1].content
+            except Exception as e:
+                logger.warning("MCP agent failed (%s: %s), falling back to direct LLM", type(e).__name__, e)
+                mcp_tools = []
+
+        if not mcp_tools:
+            answer = (_DIRECT_PROMPT | llm | StrOutputParser()).invoke({
+                "input": req.message,
+                "chat_history": chat_history,
+            })
+
+        sources = []
 
     _sessions[req.session_id] = chat_history + [
         HumanMessage(content=req.message),

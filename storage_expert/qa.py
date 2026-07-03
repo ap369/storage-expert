@@ -1,7 +1,7 @@
+import os
 from pathlib import Path
 from typing import Optional
 
-from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -9,12 +9,26 @@ from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
 from storage_expert.prompts import load_system_prompt
 
+RAG_ENABLED = os.getenv("STORAGE_EXPERT_RAG_ENABLED", "true").lower() == "true"
+
 
 def _format_docs(docs) -> str:
     return "\n\n".join(d.page_content for d in docs)
 
 
 def ask_question(question: str, provider: str, model: Optional[str] = None) -> None:
+    llm = get_llm(provider, model)
+
+    if not RAG_ENABLED:
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful assistant."),
+            ("human", "{input}"),
+        ])
+        answer = (prompt | llm | StrOutputParser()).invoke({"input": question})
+        print(f"\n{answer}\n")
+        return
+
+    from langchain_chroma import Chroma
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
 
     if vectorstore._collection.count() == 0:
@@ -22,7 +36,6 @@ def ask_question(question: str, provider: str, model: Optional[str] = None) -> N
         return
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-    llm = get_llm(provider, model)
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", load_system_prompt()),
@@ -31,10 +44,9 @@ def ask_question(question: str, provider: str, model: Optional[str] = None) -> N
 
     docs = retriever.invoke(question)
     answer = (prompt | llm | StrOutputParser()).invoke({"input": question, "context": _format_docs(docs)})
-    result = {"answer": answer, "context": docs}
 
-    print(f"\n{result['answer']}\n")
-    _print_sources(result.get("context", []))
+    print(f"\n{answer}\n")
+    _print_sources(docs)
 
 
 def _print_sources(docs) -> None:
