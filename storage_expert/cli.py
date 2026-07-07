@@ -1,4 +1,3 @@
-import os
 import warnings
 
 import click
@@ -32,29 +31,23 @@ def ingest(filepath, folder_path):
 
 @cli.command()
 @click.argument("question")
-@click.option("--provider", default=None, metavar="PROVIDER",
-              help="LLM provider: claude | openai | ollama | groq | custom  [env: STORAGE_EXPERT_PROVIDER]")
-@click.option("--model", default=None, metavar="MODEL", help="Model name override")
-def ask(question, provider, model):
+@click.option("--model", default=None, metavar="MODEL", help="Model name override  [env: LLM_MODEL]")
+def ask(question, model):
     """Ask a single question (non-interactive)."""
-    provider = provider or os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
     from storage_expert.qa import ask_question
     try:
-        ask_question(question, provider, model)
+        ask_question(question, model)
     except ValueError as e:
         raise click.ClickException(str(e))
 
 
 @cli.command()
-@click.option("--provider", default=None, metavar="PROVIDER",
-              help="LLM provider: claude | openai | ollama | groq | custom  [env: STORAGE_EXPERT_PROVIDER]")
-@click.option("--model", default=None, metavar="MODEL", help="Model name override")
-def chat(provider, model):
+@click.option("--model", default=None, metavar="MODEL", help="Model name override  [env: LLM_MODEL]")
+def chat(model):
     """Start an interactive chat session with conversation memory."""
-    provider = provider or os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
     from storage_expert.chat import start_chat
     try:
-        start_chat(provider, model)
+        start_chat(model)
     except ValueError as e:
         raise click.ClickException(str(e))
 

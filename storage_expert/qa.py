@@ -19,8 +19,8 @@ def _format_docs(docs) -> str:
     return "\n\n".join(d.page_content for d in docs)
 
 
-def ask_question(question: str, provider: str, model: Optional[str] = None) -> None:
-    llm = get_llm(provider, model)
+def ask_question(question: str, model: Optional[str] = None) -> None:
+    llm = get_llm(model)
 
     if not RAG_ENABLED:
         answer = (_DIRECT_PROMPT | llm | StrOutputParser()).invoke({"input": question})

@@ -1,67 +1,28 @@
 import os
 from typing import Optional
 
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-def get_llm(provider: str, model: Optional[str] = None):
-    if provider == "claude":
-        from langchain_anthropic import ChatAnthropic
-        key = os.getenv("ANTHROPIC_API_KEY")
-        if not key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-        return ChatAnthropic(model=model or "claude-sonnet-4-6", api_key=key)
+_DEFAULT_API_URL = "https://api.openai.com/v1"
 
-    elif provider == "openai":
-        from langchain_openai import ChatOpenAI
-        key = os.getenv("OPENAI_API_KEY")
-        if not key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        return ChatOpenAI(model=model or "gpt-4o", api_key=key)
 
-    elif provider == "ollama":
-        from langchain_ollama import ChatOllama
-        return ChatOllama(model=model or "llama3")
-
-    elif provider == "groq":
-        from langchain_groq import ChatGroq
-        key = os.getenv("GROQ_API_KEY")
-        if not key:
-            raise ValueError("GROQ_API_KEY environment variable not set")
-        return ChatGroq(model=model or "llama-3.3-70b-versatile", api_key=key)
-
-    elif provider == "custom":
-        from langchain_openai import ChatOpenAI
-        url = os.getenv("CUSTOM_API_URL")
-        key = os.getenv("CUSTOM_API_KEY")
-        if not url:
-            raise ValueError("CUSTOM_API_URL environment variable not set")
-        if not key:
-            raise ValueError("CUSTOM_API_KEY environment variable not set")
-        return ChatOpenAI(
-            model=model or os.getenv("CUSTOM_API_MODEL", "default"),
-            base_url=url,
-            api_key=key,
-        )
-
-    else:
-        raise ValueError(f"Unknown provider '{provider}'. Choose: claude, openai, ollama, groq, custom")
+def get_llm(model: Optional[str] = None):
+    api_key = os.getenv("API_KEY")
+    if not api_key:
+        raise ValueError("API_KEY environment variable is not set")
+    return ChatOpenAI(
+        base_url=os.getenv("API_URL", _DEFAULT_API_URL),
+        api_key=api_key,
+        model=model if model is not None else os.getenv("LLM_MODEL", "gpt-4o"),
+    )
 
 
 def get_embeddings():
-    backend = os.getenv("STORAGE_EXPERT_EMBEDDINGS", "huggingface")
-
-    if backend == "openai":
-        from langchain_openai import OpenAIEmbeddings
-        key = os.getenv("OPENAI_API_KEY")
-        if not key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAI embeddings")
-        return OpenAIEmbeddings(api_key=key)
-
-    elif backend == "ollama":
-        from langchain_ollama import OllamaEmbeddings
-        embed_model = os.getenv("STORAGE_EXPERT_EMBEDDINGS_MODEL", "nomic-embed-text")
-        return OllamaEmbeddings(model=embed_model)
-
-    else:  # huggingface (default)
-        from langchain_huggingface import HuggingFaceEmbeddings
-        models_dir = os.path.join(os.getcwd(), "models")
-        return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", cache_folder=models_dir)
+    embed_key = os.getenv("EMBED_API_KEY")
+    api_key = embed_key if embed_key is not None else os.getenv("API_KEY", "")
+    return OpenAIEmbeddings(
+        base_url=os.getenv("EMBED_API_URL") or os.getenv("API_URL", _DEFAULT_API_URL),
+        api_key=api_key,
+        model=os.getenv("EMBED_MODEL", "text-embedding-3-small"),
+        check_embedding_ctx_length=False,
+    )

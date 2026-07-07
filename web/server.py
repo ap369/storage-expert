@@ -131,10 +131,7 @@ async def ingest_pdf(file: UploadFile = File(...)):
     logger.info("Saved to vendor_pdfs/%s", file.filename)
 
     try:
-        before = vectorstore._collection.count()
-        ingest_file(str(saved_path))
-        after = vectorstore._collection.count()
-        chunks_stored = after - before
+        chunks_stored = ingest_file(str(saved_path))
     except Exception:
         saved_path.unlink(missing_ok=True)
         raise
@@ -175,8 +172,7 @@ def _format_docs(docs) -> str:
 
 @app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
-    provider = os.getenv("STORAGE_EXPERT_PROVIDER", "claude")
-    llm = get_llm(provider)
+    llm = get_llm()
     chat_history = _sessions.get(req.session_id, [])
 
     if RAG_ENABLED:

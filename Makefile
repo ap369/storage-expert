@@ -17,7 +17,7 @@ help:
 	@echo "  make install-locked           Install exact versions from requirements.lock"
 	@echo "  make lock                     Regenerate requirements.lock from pyproject.toml"
 	@echo "  make check                    Run smoke tests (no API keys needed)"
-	@echo "  make download-models          Download embedding model for offline use (~80MB)"
+	@echo "  make download-models          (no-op) embeddings now use API — see .env.example"
 	@echo "  make serve                    Start web UI at http://localhost:8000"
 	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
 	@echo "  make ask    ARGS='question'   Ask a single question"
@@ -75,7 +75,8 @@ install-mcp:
 	@echo "MCP extras installed."
 
 download-models:
-	$(BIN)/python -c "import os; from langchain_huggingface import HuggingFaceEmbeddings; HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2', cache_folder=os.path.join(os.getcwd(), 'models')); print('Model ready in ./models/')"
+	@echo "Embeddings now use a remote API — no local model download needed."
+	@echo "Set EMBED_API_URL / EMBED_API_KEY / EMBED_MODEL in your .env file."
 
 serve:
 	-pkill -f "uvicorn web.server" 2>/dev/null; sleep 0.5

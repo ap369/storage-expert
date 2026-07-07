@@ -22,18 +22,18 @@ def _already_ingested(vectorstore: Chroma, abs_path: str) -> bool:
     return len(results["ids"]) > 0
 
 
-def ingest_file(filepath: str) -> None:
+def ingest_file(filepath: str) -> int:
     abs_path = str(Path(filepath).resolve())
 
     if not Path(abs_path).exists():
         logger.error("File not found: %s", filepath)
-        return
+        return 0
 
     vectorstore = _get_vectorstore()
 
     if _already_ingested(vectorstore, abs_path):
         logger.info("Skipping (already ingested): %s", Path(filepath).name)
-        return
+        return 0
 
     size_mb = Path(abs_path).stat().st_size / 1_048_576
     logger.info("Ingesting: %s (%.1f MB)", Path(filepath).name, size_mb)
@@ -57,6 +57,7 @@ def ingest_file(filepath: str) -> None:
         logger.info("  Embedded %d/%d chunks...", done, len(chunks))
 
     logger.info("  Done: stored %d chunks from %d pages", len(chunks), len(docs))
+    return len(chunks)
 
 
 def ingest_folder(folder_path: str) -> None:

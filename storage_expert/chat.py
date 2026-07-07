@@ -37,8 +37,8 @@ def _format_docs(docs) -> str:
     return "\n\n".join(d.page_content for d in docs)
 
 
-def start_chat(provider: str, model: Optional[str] = None) -> None:
-    llm = get_llm(provider, model)
+def start_chat(model: Optional[str] = None) -> None:
+    llm = get_llm(model)
 
     if RAG_ENABLED:
         from langchain_chroma import Chroma
@@ -55,7 +55,7 @@ def start_chat(provider: str, model: Optional[str] = None) -> None:
         direct_chain = _DIRECT_PROMPT | llm | StrOutputParser()
 
     chat_history = []
-    print(f"Storage Expert Chat [{provider}] — type 'exit' to quit\n")
+    print("Storage Expert Chat — type 'exit' to quit\n")
 
     while True:
         try:
