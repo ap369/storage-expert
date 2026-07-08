@@ -2,7 +2,7 @@
 
 AI agent that reads enterprise storage vendor PDFs (NetApp, Pure Storage, Dell EMC, HPE, etc.) and answers natural language questions about specs, features, and compatibility.
 
-Built with LangChain, ChromaDB, FastAPI, and your choice of LLM provider.
+Built with LangChain, ChromaDB, FastAPI, and any OpenAI-compatible LLM endpoint.
 
 ## Features
 
@@ -11,9 +11,8 @@ Built with LangChain, ChromaDB, FastAPI, and your choice of LLM provider.
 - **Ingest** vendor PDFs via web upload or CLI (single file or folder)
 - **Ask** single-shot questions from the command line
 - **Persistent** vector store — ingest once, query forever
-- **Multi-provider** — Claude, OpenAI, Groq, Ollama, or any OpenAI-compatible router
+- **Provider-agnostic** — works with any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, vLLM, LiteLLM, ...)
 - **MCP support** — connect any MCP server for live tool calling alongside RAG
-- **Offline-ready** — pre-download the embedding model for air-gapped VMs
 - **Docker-ready** — single image, volume-mounted knowledge base
 - **VM-ready** — systemd + nginx deployment included
 
@@ -86,19 +85,6 @@ To update after a code change:
 make deploy-update   # git pull + pip install + restart
 ```
 
-### Offline VM (no internet)
-
-```bash
-# On a machine WITH internet — run once
-make download-models        # saves model to ./models/ (~80MB)
-
-# Copy to the VM
-rsync -a models/ user@vm:/data/storage-expert/models/
-
-# On the VM — add to .env
-echo "HF_HUB_OFFLINE=1" >> .env
-```
-
 ---
 
 ## Authentication
@@ -158,8 +144,8 @@ make chat
 
 # Or use the CLI directly
 source .venv/bin/activate
-storage-expert ask --provider groq "What protocols does Pure Storage support?"
-storage-expert chat --provider openai
+storage-expert ask "What protocols does Pure Storage support?"
+storage-expert chat --model llama-3.3-70b-versatile   # optional per-run model override
 ```
 
 ---
@@ -173,7 +159,6 @@ Run `make` or `make help` to see all commands.
 | Command | Description |
 |---|---|
 | `make install` | Create venv and install all dependencies |
-| `make download-models` | Pre-download embedding model for offline use (~80MB) |
 | `make serve` | Start the web server at http://localhost:8000 |
 | `make ingest ARGS="..."` | Ingest PDFs (--file or --folder) |
 | `make ask ARGS="'question'"` | Ask a single question |
@@ -212,36 +197,26 @@ Run `make` or `make help` to see all commands.
 
 ---
 
-## Providers
+## LLM & Embeddings Configuration
 
-| Provider | Env var required |
-|---|---|
-| `claude` (default) | `ANTHROPIC_API_KEY` |
-| `openai` | `OPENAI_API_KEY` |
-| `groq` | `GROQ_API_KEY` |
-| `ollama` | none (Ollama must be running) |
-| `custom` | `CUSTOM_API_URL` + `CUSTOM_API_KEY` |
+Any OpenAI-compatible endpoint works. Configure in `.env`:
 
-Set default provider in `.env`:
 ```env
-STORAGE_EXPERT_PROVIDER=groq
+# LLM (required)
+API_URL=https://api.groq.com/openai/v1
+API_KEY=your-api-key            # any placeholder value for keyless endpoints
+LLM_MODEL=llama-3.3-70b-versatile
+
+# Embeddings (defaults to the LLM endpoint; only used when RAG is enabled)
+EMBED_API_URL=http://localhost:11434/v1   # e.g. local Ollama
+EMBED_API_KEY=                            # leave empty for keyless endpoints
+EMBED_MODEL=all-minilm
 ```
 
-Override at runtime: `storage-expert chat --provider openai`
+Example endpoints: OpenAI (`https://api.openai.com/v1`), Groq (`https://api.groq.com/openai/v1`), local Ollama (`http://localhost:11434/v1`), or any vLLM/LiteLLM router.
 
----
-
-## Embeddings
-
-Default: `all-MiniLM-L6-v2` via `sentence-transformers` — runs locally, no API key needed. Model is cached in `./models/` after first download.
-
-Override via `STORAGE_EXPERT_EMBEDDINGS` in `.env`:
-
-| Value | Backend | Requirement |
-|---|---|---|
-| `huggingface` (default) | Local sentence-transformers | none |
-| `openai` | OpenAI text-embedding-3-small | `OPENAI_API_KEY` |
-| `ollama` | Ollama nomic-embed-text | Ollama running |
+> **Note:** if you change `EMBED_MODEL` after ingesting documents, wipe and re-ingest —
+> embedding dimensions differ between models: `make reset && make reingest`
 
 ---
 
@@ -265,7 +240,6 @@ storage_expert/
 ├── deploy/
 │   ├── storage-expert.service   # systemd unit file
 │   └── nginx.conf               # nginx reverse proxy config
-├── models/                  # Cached embedding model (gitignored)
 ├── vendor_pdfs/             # Drop PDFs here (gitignored)
 ├── chroma_db/               # Persistent vector store (gitignored)
 ├── mcp_servers.json         # MCP server config (gitignored)
@@ -279,8 +253,7 @@ storage_expert/
 
 ## Requirements
 
-- Python 3.9+
-- An API key for your chosen LLM provider
+- Python 3.11+
+- An OpenAI-compatible LLM endpoint (URL + API key)
 - Docker (optional, for containerized deployment)
 - nginx + systemd (optional, for VM deployment)
-- Python 3.10+ (optional, for MCP integration)

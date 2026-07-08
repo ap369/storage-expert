@@ -3,15 +3,27 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-_DEFAULT_API_URL = "https://api.openai.com/v1"
+# The openai client rejects an empty api_key at construction; keyless endpoints
+# (e.g. local Ollama) accept any placeholder value.
+_KEYLESS_PLACEHOLDER = "not-needed"
+
+
+def _api_url() -> str:
+    url = os.getenv("API_URL")
+    if not url:
+        raise ValueError("API_URL environment variable is not set")
+    return url
 
 
 def get_llm(model: Optional[str] = None):
     api_key = os.getenv("API_KEY")
     if not api_key:
-        raise ValueError("API_KEY environment variable is not set")
+        raise ValueError(
+            "API_KEY environment variable is not set "
+            "(for keyless endpoints like local Ollama, set any placeholder value)"
+        )
     return ChatOpenAI(
-        base_url=os.getenv("API_URL", _DEFAULT_API_URL),
+        base_url=_api_url(),
         api_key=api_key,
         model=model if model is not None else os.getenv("LLM_MODEL", "gpt-4o"),
     )
@@ -19,10 +31,14 @@ def get_llm(model: Optional[str] = None):
 
 def get_embeddings():
     embed_key = os.getenv("EMBED_API_KEY")
-    api_key = embed_key if embed_key is not None else os.getenv("API_KEY", "")
+    if embed_key is None:
+        embed_key = os.getenv("API_KEY")
+    base_url = os.getenv("EMBED_API_URL") or _api_url()
     return OpenAIEmbeddings(
-        base_url=os.getenv("EMBED_API_URL") or os.getenv("API_URL", _DEFAULT_API_URL),
-        api_key=api_key,
+        base_url=base_url,
+        api_key=embed_key or _KEYLESS_PLACEHOLDER,
         model=os.getenv("EMBED_MODEL", "text-embedding-3-small"),
-        check_embedding_ctx_length=False,
+        # Non-OpenAI endpoints require plain-string inputs; keep tiktoken
+        # length safety only when talking to OpenAI itself.
+        check_embedding_ctx_length="api.openai.com" in base_url,
     )

@@ -43,7 +43,7 @@ def ingest_file(filepath: str) -> int:
         docs = loader.load()
     except Exception as e:
         logger.warning("Could not read %s: %s", filepath, e)
-        return
+        return 0
 
     logger.info("  Loaded %d pages — chunking...", len(docs))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)

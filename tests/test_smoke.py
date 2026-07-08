@@ -12,17 +12,11 @@ _THIRD_PARTY = [
     "langchain_chroma",
     "langchain_core",
     "langchain_community",
-    "langchain_huggingface",
     "langchain_openai",
-    "langchain_anthropic",
-    "langchain_groq",
-    "langchain_ollama",
     "langchain_text_splitters",
-    # ML / embedding stack (version skew between transformers/torch causes crashes)
+    # Vector store / PDF
     "chromadb",
     "fitz",                 # pymupdf — public API is under 'fitz'
-    "sentence_transformers",
-    "transformers",
     # Web layer
     "fastapi",
     "uvicorn",
