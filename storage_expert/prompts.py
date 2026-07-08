@@ -19,3 +19,14 @@ def load_system_prompt() -> str:
 
 def load_direct_prompt() -> str:
     return "You are a helpful assistant."
+
+
+def format_docs(docs) -> str:
+    """Format retrieved chunks with their source label so the model can cite them."""
+    parts = []
+    for d in docs:
+        src = Path(d.metadata.get("source", "unknown")).name
+        page = d.metadata.get("page")
+        label = f"[{src}, page {int(page) + 1}]" if page is not None else f"[{src}]"
+        parts.append(f"{label}\n{d.page_content}")
+    return "\n\n".join(parts)

@@ -26,7 +26,7 @@ from storage_expert.ingest import ingest_file, CHROMA_PATH
 from storage_expert.providers import get_embeddings, get_llm
 from storage_expert.mcp_client import get_mcp_tools, probe_servers
 from storage_expert.auth import init_db, verify_user
-from storage_expert.prompts import load_system_prompt, load_direct_prompt
+from storage_expert.prompts import load_system_prompt, load_direct_prompt, format_docs
 
 
 @asynccontextmanager
@@ -116,16 +116,15 @@ async def ingest_pdf(file: UploadFile = File(...)):
     size_mb = len(content) / 1_048_576
     logger.info("Upload received: %s (%.1f MB)", file.filename, size_mb)
 
-    # Check if already ingested by original filename
+    # Check if already ingested — same key (absolute source path) as ingest_file
+    saved_path = VENDOR_DIR / file.filename
     from langchain_chroma import Chroma
     vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
-    all_meta = vectorstore._collection.get()
-    existing_names = {Path(m["source"]).name for m in all_meta.get("metadatas", []) if m and "source" in m}
-    if file.filename in existing_names:
+    existing = vectorstore._collection.get(where={"source": str(saved_path.resolve())})
+    if existing["ids"]:
         return {"status": "skipped", "filename": file.filename, "chunks_stored": 0}
 
     # Save to vendor_pdfs/ for permanent storage
-    saved_path = VENDOR_DIR / file.filename
     with open(saved_path, "wb") as f:
         f.write(content)
     logger.info("Saved to vendor_pdfs/%s", file.filename)
@@ -166,13 +165,12 @@ _DIRECT_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def _format_docs(docs) -> str:
-    return "\n\n".join(d.page_content for d in docs)
-
-
 @app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
-    llm = get_llm()
+    try:
+        llm = get_llm()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     chat_history = _sessions.get(req.session_id, [])
 
     if RAG_ENABLED:
@@ -197,7 +195,13 @@ async def chat(req: ChatRequest):
                     name="search_vendor_documents",
                     description="Search the vendor PDF knowledge base for storage specs, features, and compatibility information.",
                 )
-                agent = create_react_agent(llm, [rag_tool] + mcp_tools)
+                # Same grounding rules as the RAG chain; the tool replaces inline context
+                agent_prompt = load_system_prompt().replace(
+                    "{context}",
+                    "Use the search_vendor_documents tool to retrieve documentation "
+                    "excerpts before answering technical questions.",
+                )
+                agent = create_react_agent(llm, [rag_tool] + mcp_tools, prompt=agent_prompt)
                 result = await agent.ainvoke({
                     "messages": chat_history + [HumanMessage(content=req.message)]
                 })
@@ -217,7 +221,7 @@ async def chat(req: ChatRequest):
             answer = await (_QA_PROMPT | llm | StrOutputParser()).ainvoke({
                 "input": req.message,
                 "chat_history": chat_history,
-                "context": _format_docs(docs),
+                "context": format_docs(docs),
             })
 
             sources = set()
@@ -236,7 +240,7 @@ async def chat(req: ChatRequest):
         if mcp_tools:
             try:
                 from langgraph.prebuilt import create_react_agent
-                agent = create_react_agent(llm, mcp_tools)
+                agent = create_react_agent(llm, mcp_tools, prompt=load_direct_prompt())
                 result = await agent.ainvoke({
                     "messages": chat_history + [HumanMessage(content=req.message)]
                 })

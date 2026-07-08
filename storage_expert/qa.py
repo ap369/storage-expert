@@ -6,17 +6,13 @@ from langchain_core.output_parsers import StrOutputParser
 
 from storage_expert.providers import get_llm, get_embeddings
 from storage_expert.ingest import CHROMA_PATH
-from storage_expert.prompts import load_system_prompt, load_direct_prompt
+from storage_expert.prompts import load_system_prompt, load_direct_prompt, format_docs
 from storage_expert.config import RAG_ENABLED
 
 _DIRECT_PROMPT = ChatPromptTemplate.from_messages([
     ("system", load_direct_prompt()),
     ("human", "{input}"),
 ])
-
-
-def _format_docs(docs) -> str:
-    return "\n\n".join(d.page_content for d in docs)
 
 
 def ask_question(question: str, model: Optional[str] = None) -> None:
@@ -42,7 +38,7 @@ def ask_question(question: str, model: Optional[str] = None) -> None:
     ])
 
     docs = retriever.invoke(question)
-    answer = (prompt | llm | StrOutputParser()).invoke({"input": question, "context": _format_docs(docs)})
+    answer = (prompt | llm | StrOutputParser()).invoke({"input": question, "context": format_docs(docs)})
 
     print(f"\n{answer}\n")
     _print_sources(docs)
