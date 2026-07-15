@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -13,11 +14,12 @@ _EMBED_BATCH = 50
 logger = logging.getLogger(__name__)
 
 
-def _get_vectorstore() -> Chroma:
+@lru_cache(maxsize=1)
+def get_vectorstore() -> Chroma:
     return Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
 
 
-def _already_ingested(vectorstore: Chroma, abs_path: str) -> bool:
+def already_ingested(vectorstore: Chroma, abs_path: str) -> bool:
     results = vectorstore._collection.get(where={"source": abs_path})
     return len(results["ids"]) > 0
 
@@ -29,9 +31,9 @@ def ingest_file(filepath: str) -> int:
         logger.error("File not found: %s", filepath)
         return 0
 
-    vectorstore = _get_vectorstore()
+    vectorstore = get_vectorstore()
 
-    if _already_ingested(vectorstore, abs_path):
+    if already_ingested(vectorstore, abs_path):
         logger.info("Skipping (already ingested): %s", Path(filepath).name)
         return 0
 

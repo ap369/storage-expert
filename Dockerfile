@@ -3,6 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY pyproject.toml .
+COPY system_prompt.md .
 COPY storage_expert/ ./storage_expert/
 COPY web/ ./web/
 

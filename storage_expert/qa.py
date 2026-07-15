@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-from storage_expert.providers import get_llm, get_embeddings
-from storage_expert.ingest import CHROMA_PATH
+from storage_expert.providers import get_llm
+from storage_expert.ingest import get_vectorstore
 from storage_expert.prompts import load_system_prompt, load_direct_prompt, format_docs
 from storage_expert.config import RAG_ENABLED
 
@@ -15,7 +14,7 @@ _DIRECT_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def ask_question(question: str, model: Optional[str] = None) -> None:
+def ask_question(question: str, model: str | None = None) -> None:
     llm = get_llm(model)
 
     if not RAG_ENABLED:
@@ -23,8 +22,7 @@ def ask_question(question: str, model: Optional[str] = None) -> None:
         print(f"\n{answer}\n")
         return
 
-    from langchain_chroma import Chroma
-    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
+    vectorstore = get_vectorstore()
 
     if vectorstore._collection.count() == 0:
         print("No documents ingested yet. Run:\n  storage-expert ingest --file <path/to/vendor.pdf>")

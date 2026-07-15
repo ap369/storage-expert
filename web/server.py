@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -23,8 +24,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
 
-from storage_expert.ingest import ingest_file, CHROMA_PATH
-from storage_expert.providers import get_embeddings, get_llm
+from storage_expert.ingest import ingest_file, get_vectorstore, already_ingested
+from storage_expert.providers import get_llm
 from storage_expert.mcp_client import get_mcp_tools, probe_servers
 from storage_expert.auth import init_db, verify_user
 from storage_expert.prompts import load_system_prompt, load_direct_prompt, format_docs
@@ -100,9 +101,7 @@ async def get_config():
 def list_documents():
     if not RAG_ENABLED:
         return {"documents": []}
-    from langchain_chroma import Chroma
-    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
-    results = vectorstore._collection.get()
+    results = get_vectorstore()._collection.get()
     sources = set()
     for meta in results.get("metadatas", []):
         if meta and "source" in meta:
@@ -128,10 +127,7 @@ async def ingest_pdf(file: UploadFile = File(...)):
 
     # Check if already ingested — same key (absolute source path) as ingest_file
     saved_path = VENDOR_DIR / file.filename
-    from langchain_chroma import Chroma
-    vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
-    existing = vectorstore._collection.get(where={"source": str(saved_path.resolve())})
-    if existing["ids"]:
+    if already_ingested(get_vectorstore(), str(saved_path.resolve())):
         return {"status": "skipped", "filename": file.filename, "chunks_stored": 0}
 
     # Save to vendor_pdfs/ for permanent storage
@@ -140,7 +136,7 @@ async def ingest_pdf(file: UploadFile = File(...)):
     logger.info("Saved to vendor_pdfs/%s", file.filename)
 
     try:
-        chunks_stored = ingest_file(str(saved_path))
+        chunks_stored = await asyncio.to_thread(ingest_file, str(saved_path))
     except Exception:
         saved_path.unlink(missing_ok=True)
         raise
@@ -184,8 +180,7 @@ async def chat(req: ChatRequest):
     chat_history = _sessions.get(req.session_id, [])
 
     if RAG_ENABLED:
-        from langchain_chroma import Chroma
-        vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embeddings())
+        vectorstore = get_vectorstore()
         if vectorstore._collection.count() == 0:
             return {"answer": "No documents in the knowledge base yet. Upload a PDF using the sidebar.", "sources": []}
 

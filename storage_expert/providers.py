@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from functools import lru_cache
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
@@ -15,7 +15,8 @@ def _api_url() -> str:
     return url
 
 
-def get_llm(model: Optional[str] = None):
+@lru_cache(maxsize=None)
+def get_llm(model: str | None = None):
     api_key = os.getenv("API_KEY")
     if not api_key:
         raise ValueError(
@@ -29,6 +30,7 @@ def get_llm(model: Optional[str] = None):
     )
 
 
+@lru_cache(maxsize=1)
 def get_embeddings():
     embed_key = os.getenv("EMBED_API_KEY")
     if embed_key is None:

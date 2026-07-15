@@ -5,5 +5,6 @@ services:
       - "8000:8000"
     volumes:
       - ./chroma_db:/app/chroma_db
+      - ./vendor_pdfs:/app/vendor_pdfs
     env_file:
       - .env

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-mcp install-locked lock check serve download-models ingest ask chat adduser \
+.PHONY: help install install-dev install-mcp install-locked lock check serve ingest ask chat adduser \
         docker-build docker-up docker-down clean reset reingest \
         deploy deploy-setup deploy-install-service deploy-install-nginx deploy-update \
         deploy-start deploy-stop deploy-restart deploy-status deploy-logs
@@ -17,7 +17,6 @@ help:
 	@echo "  make install-locked           Install exact versions from requirements.lock"
 	@echo "  make lock                     Regenerate requirements.lock from pyproject.toml"
 	@echo "  make check                    Run smoke tests (no API keys needed)"
-	@echo "  make download-models          (no-op) embeddings now use API — see .env.example"
 	@echo "  make serve                    Start web UI at http://localhost:8000"
 	@echo "  make ingest ARGS='--file f'   Ingest a PDF (--file or --folder)"
 	@echo "  make ask    ARGS='question'   Ask a single question"
@@ -73,10 +72,6 @@ check:
 install-mcp:
 	$(BIN)/pip install -e '.[mcp]' --quiet
 	@echo "MCP extras installed."
-
-download-models:
-	@echo "Embeddings now use a remote API — no local model download needed."
-	@echo "Set EMBED_API_URL / EMBED_API_KEY / EMBED_MODEL in your .env file."
 
 serve:
 	-pkill -f "uvicorn web.server" 2>/dev/null; sleep 0.5
