@@ -7,29 +7,30 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4;
+      font-family: system-ui, sans-serif; background: #00402b; color: #1c2a23;
       display: flex; align-items: center; justify-content: center; height: 100vh;
     }
     .card {
-      background: #313244; border-radius: 12px; padding: 40px 36px;
+      background: #fff; border-radius: 12px; padding: 40px 36px;
       width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 20px;
+      border-top: 4px solid #00915a;
     }
-    h1 { font-size: 20px; font-weight: 700; color: #cdd6f4; text-align: center; }
-    .subtitle { font-size: 13px; color: #6c7086; text-align: center; margin-top: -12px; }
-    label { font-size: 13px; color: #a6adc8; display: block; margin-bottom: 6px; }
+    h1 { font-size: 20px; font-weight: 700; color: #00402b; text-align: center; }
+    .subtitle { font-size: 13px; color: #6b8578; text-align: center; margin-top: -12px; }
+    label { font-size: 13px; color: #4a5f55; display: block; margin-bottom: 6px; }
     input[type="text"], input[type="password"] {
-      width: 100%; padding: 10px 12px; background: #1e1e2e; border: 1px solid #45475a;
-      border-radius: 6px; color: #cdd6f4; font-size: 14px; outline: none;
+      width: 100%; padding: 10px 12px; background: #fff; border: 1px solid #c9dad1;
+      border-radius: 6px; color: #1c2a23; font-size: 14px; outline: none;
     }
-    input[type="text"]:focus, input[type="password"]:focus { border-color: #89b4fa; }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #00915a; }
     button[type="submit"] {
-      width: 100%; padding: 11px; background: #89b4fa; color: #1e1e2e;
+      width: 100%; padding: 11px; background: #00915a; color: #fff;
       border: none; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer;
     }
-    button[type="submit"]:hover { background: #74c7ec; }
+    button[type="submit"]:hover { background: #007449; }
     .error {
-      background: #f38ba822; border: 1px solid #f38ba8; border-radius: 6px;
-      padding: 10px 12px; font-size: 13px; color: #f38ba8; text-align: center;
+      background: #fdedef; border: 1px solid #e4526a; border-radius: 6px;
+      padding: 10px 12px; font-size: 13px; color: #c6344b; text-align: center;
     }
   </style>
 </head>

@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from openai import APIConnectionError
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -41,6 +42,15 @@ app.add_middleware(
     secret_key=os.getenv("SECRET_KEY", "change-me"),
     https_only=False,
 )
+
+@app.exception_handler(APIConnectionError)
+async def api_connection_error(request: Request, exc: APIConnectionError):
+    logger.error("Model API unreachable: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Cannot reach the model API (LLM or embeddings endpoint). Check that the configured services are running."},
+    )
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 VENDOR_DIR = Path(__file__).parent.parent / "vendor_pdfs"

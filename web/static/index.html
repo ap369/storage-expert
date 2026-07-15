@@ -7,26 +7,26 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #f5f5f5; }
+    body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #f2f6f3; }
 
     /* Sidebar */
     #sidebar {
-      width: 260px; background: #1e1e2e; color: #cdd6f4;
+      width: 260px; background: #00402b; color: #dcede4;
       display: flex; flex-direction: column; padding: 16px; gap: 12px; flex-shrink: 0;
     }
-    #sidebar h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #89b4fa; }
+    #sidebar h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #7fd1a8; }
     #add-btn {
-      background: #89b4fa; color: #1e1e2e; border: none; border-radius: 6px;
+      background: #00915a; color: #fff; border: none; border-radius: 6px;
       padding: 8px 12px; cursor: pointer; font-size: 13px; font-weight: 600; text-align: left;
     }
-    #add-btn:hover { background: #74c7ec; }
+    #add-btn:hover { background: #007449; }
     #file-input { display: none; }
     #doc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 40%; }
     #doc-list li {
       font-size: 12px; padding: 6px 8px; border-radius: 4px;
-      background: #313244; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background: #0b5238; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    #upload-status { font-size: 11px; color: #a6e3a1; min-height: 16px; }
+    #upload-status { font-size: 11px; color: #8fe0b8; min-height: 16px; }
 
     /* Knowledge Base section */
     #kb-section { display: flex; flex-direction: column; gap: 12px; }
@@ -38,37 +38,37 @@
     #mcp-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
     #mcp-list li {
       font-size: 12px; padding: 6px 8px; border-radius: 4px;
-      background: #313244; display: flex; align-items: center; gap: 6px;
+      background: #0b5238; display: flex; align-items: center; gap: 6px;
     }
     .mcp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .mcp-dot.online  { background: #a6e3a1; }
-    .mcp-dot.offline { background: #f38ba8; }
+    .mcp-dot.online  { background: #35c57f; }
+    .mcp-dot.offline { background: #e4526a; }
     .mcp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .mcp-meta { font-size: 10px; color: #6c7086; white-space: nowrap; }
+    .mcp-meta { font-size: 10px; color: #7fa894; white-space: nowrap; }
 
     /* Main chat area */
     #main { flex: 1; display: flex; flex-direction: column; }
-    #header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #e0e0e0; font-weight: 600; font-size: 16px; display: flex; align-items: center; justify-content: space-between; }
+    #header { padding: 16px 20px; background: #fff; border-bottom: 2px solid #00915a; font-weight: 600; font-size: 16px; display: flex; align-items: center; justify-content: space-between; color: #00402b; }
     #logout-btn { font-size: 12px; color: #888; background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
     #logout-btn:hover { color: #333; border-color: #bbb; }
     #messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 
     .msg { max-width: 75%; min-width: 0; padding: 10px 14px; border-radius: 12px; line-height: 1.5; font-size: 14px; word-break: break-word; }
-    .msg.user { align-self: flex-end; background: #89b4fa; color: #1e1e2e; border-bottom-right-radius: 4px; }
-    .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+    .msg.user { align-self: flex-end; background: #00915a; color: #fff; border-bottom-right-radius: 4px; }
+    .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid #dce5df; border-bottom-left-radius: 4px; }
     .sources { font-size: 11px; color: #888; margin-top: 6px; }
 
-    #input-bar { display: flex; gap: 8px; padding: 16px 20px; background: #fff; border-top: 1px solid #e0e0e0; }
+    #input-bar { display: flex; gap: 8px; padding: 16px 20px; background: #fff; border-top: 1px solid #dce5df; }
     #msg-input {
-      flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+      flex: 1; padding: 10px 14px; border: 1px solid #c9dad1; border-radius: 8px;
       font-size: 14px; outline: none;
     }
-    #msg-input:focus { border-color: #89b4fa; }
+    #msg-input:focus { border-color: #00915a; }
     #send-btn {
-      background: #89b4fa; color: #1e1e2e; border: none; border-radius: 8px;
+      background: #00915a; color: #fff; border: none; border-radius: 8px;
       padding: 10px 18px; cursor: pointer; font-weight: 600; font-size: 14px;
     }
-    #send-btn:hover { background: #74c7ec; }
+    #send-btn:hover { background: #007449; }
     #send-btn:disabled { background: #ccc; cursor: not-allowed; }
 
     /* Typing indicator */
@@ -89,7 +89,7 @@
     #upload-status.uploading::before {
       content: '';
       display: inline-block; width: 9px; height: 9px;
-      border: 2px solid #a6e3a1; border-top-color: transparent;
+      border: 2px solid #8fe0b8; border-top-color: transparent;
       border-radius: 50%; animation: spin 0.7s linear infinite;
       margin-right: 5px; vertical-align: middle;
     }
@@ -97,12 +97,12 @@
 
     /* Markdown code rendering */
     .msg.assistant pre {
-      background: #1e1e2e; color: #cdd6f4; border-radius: 6px;
+      background: #00402b; color: #dcede4; border-radius: 6px;
       padding: 10px 14px; overflow-x: auto; margin: 8px 0; font-size: 13px;
       max-width: 100%;
     }
     .msg.assistant code {
-      background: #e8e8f0; border-radius: 3px; padding: 1px 5px; font-size: 13px;
+      background: #e3f0e8; border-radius: 3px; padding: 1px 5px; font-size: 13px;
     }
     .msg.assistant pre code { background: none; padding: 0; }
     .msg.assistant p { margin: 4px 0; }
@@ -257,15 +257,22 @@
         body: JSON.stringify({ message, session_id: sessionId }),
       });
       if (!res) return;
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => null))?.detail;
+        removeTyping();
+        appendMessage('assistant', 'Error: ' + (detail || 'the server returned an error (HTTP ' + res.status + ').'));
+        return;
+      }
       const data = await res.json();
       removeTyping();
       appendMessage('assistant', data.answer, data.sources);
     } catch {
       removeTyping();
       appendMessage('assistant', 'Error: could not reach the server.');
+    } finally {
+      btn.disabled = false;
+      input.focus();
     }
-    btn.disabled = false;
-    input.focus();
   }
 
   document.getElementById('send-btn').addEventListener('click', sendMessage);
