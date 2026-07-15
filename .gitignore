@@ -9,7 +9,10 @@ dist/
 venv/
 .DS_Store
 CLAUDE.md
-docs/
 mcp_servers.json
+mcp_servers.json_
 users.db
-models/
+.vscode/
+.pytest_cache/
+.claude/
+.playwright-mcp/
